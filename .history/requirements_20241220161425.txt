@@ -1,0 +1,4 @@
+chardet==5.2.0
+opencv-python==4.10.0.84
+pillow==11.0.0
+dashscope==1.20.14
