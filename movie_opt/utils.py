@@ -7,6 +7,101 @@ import subprocess
 import shlex
 from datetime import datetime, timedelta
 import cv2
+from pkg_resources import resource_filename
+import logging
+
+def add_text_to_video(input_file, text):
+    """
+    在视频中添加文字，先保存到临时文件，再将临时文件替换原视频文件
+    支持不同视频格式（如mp4, mkv等）
+
+    :param input_file: 输入视频文件路径
+    :param text: 要添加的文字
+    """
+    print(f"给视频添加字幕 {input_file} {text}")
+    # 确保文件存在
+    if not os.path.exists(input_file):
+        raise FileNotFoundError(f"输入文件 {input_file} 不存在")
+
+    # 获取文件扩展名
+    file_ext = os.path.splitext(input_file)[1].lower()
+
+    # 临时文件路径
+    temp_file = f"add_font_temp_{file_ext}"
+
+    # 如果临时文件已经存在，删除它
+    if os.path.exists(temp_file):
+        os.remove(temp_file)
+
+    try:
+        # 字体文件路径
+        font_path = os.path.join(os.path.dirname(resource_filename(__name__,".")),'static', "SourceHanSerif-Bold.otf")  # 确保使用正确的路径
+        # drawtext需要修改路径样式为 "C\:/Users/luoruofeng/Desktop/test3/SourceHanSerif-Bold.otf"
+        font_path = font_path.replace("\\","/").replace(":","\\:")
+        # 构造ffmpeg命令
+        command = [
+            "ffmpeg",
+            "-i", input_file,  # 输入文件
+            "-vf", (
+                f"drawtext=text='{text}':"  # 动态设置文本
+                f"fontfile={font_path}:"  # 设置字体文件路径
+                "fontcolor=white@0.5:"  # 设置字体颜色为白色，透明度50%
+                "fontsize=188:"  # 设置字体大小
+                "x=(w-text_w)/2:"  # 水平居中
+                "y=(h-text_h)/2"  # 垂直居中
+            ),
+            "-codec:a", "copy",  # 保留原始音频
+            temp_file  # 临时输出文件
+        ]
+        
+        # 使用 subprocess 执行命令
+        subprocess.run(command, check=True)
+
+        # 替换原文件为处理后的临时文件
+        os.replace(temp_file, input_file)
+        logging.info(f"视频添加文字 text:{text} input_file:{input_file} font_path:{font_path}")
+    finally:
+        # 操作完成后，删除临时文件
+        if os.path.exists(temp_file):
+            os.remove(temp_file)
+
+
+def get_file_extension(file_path):
+    """
+    获取文件名或绝对路径文件的后缀。
+
+    :param file_path: 文件名或文件的绝对路径。
+    :return: 文件的后缀（包括 .），如果没有后缀则返回空字符串。
+    """
+    # 使用 os.path.splitext 分割路径和扩展名
+    _, extension = os.path.splitext(file_path)
+    return extension.lower()
+
+def change_file_extension(file_path, new_extension):
+    """
+    修改给定文件的后缀为指定后缀。
+
+    :param file_path: 需要修改的文件的绝对路径。
+    :param new_extension: 新的后缀（包含 . ，如 '.txt'）。
+    :return: 修改后新文件路径。
+    """
+    if not os.path.isabs(file_path):
+        raise ValueError("请提供文件的绝对路径")
+    
+    if not new_extension.startswith("."):
+        raise ValueError("新后缀必须以 '.' 开头")
+    
+    # 分离文件名和原始后缀
+    file_base, _ = os.path.splitext(file_path)
+    
+    # 拼接新的文件路径
+    new_file_path = f"{file_base}{new_extension}"
+    
+    # 重命名文件
+    os.rename(file_path, new_file_path)
+    
+    return new_file_path
+
 
 def find_video_files(directory, extensions=None, recursive=False):
     """
@@ -65,7 +160,7 @@ def find_srt_files(directory, extensions=None, recursive=False):
 
 
 
-def resize_video(video_path, target_width, target_height):
+def resize_video(video_path, target_width, target_height, file_extension=".mp4"):
     """
     使用 FFmpeg 将视频调整为指定的宽度和高度，直接覆盖原视频。
 
@@ -78,7 +173,7 @@ def resize_video(video_path, target_width, target_height):
     print(f"视频分辨率: {width}x{height}")
 
     if (width, height) != (target_width, target_height):
-        temp_path = f"{video_path}.temp.mp4"
+        temp_path = f"{video_path}.temp"+file_extension
         command = [
             "ffmpeg",
             "-i", video_path,
@@ -251,9 +346,9 @@ def get_time_base(video_path):
 
 
 
-def change_timescale(video_path, timescale=1000):
+def change_timescale(video_path, timescale=1000,file_extension=".mp4"):
     # 判断当前视频的 timescale 是否已经是目标值
-    temp_video_path = 'temp.mp4'
+    temp_video_path = 'temp'+file_extension
     timebase = get_time_base(video_path)
     if timebase:
         print(f"Time base: {timebase}")
@@ -300,7 +395,6 @@ def change_timescale(video_path, timescale=1000):
 # video_path = r"C:\Users\luoruofeng\Desktop\test\视频片段\每行中文视频-Lion King 2 1998-en@cn-3\Lion King 2 1998-en@cn-3-19.mp4"
 # change_timescale(video_path,800)
 
-
 def get_mp4_duration_ffmpeg(file_path):
     """
     使用 ffmpeg 获取 MP4 视频的总时长（秒），精确到小数点后 3 位。
@@ -309,23 +403,72 @@ def get_mp4_duration_ffmpeg(file_path):
     :return: float, 视频时长（秒）
     """
     try:
+        # 确保路径为绝对路径
+        file_path = os.path.abspath(file_path)
+
         # 调用 ffprobe 获取视频时长
         command = [
             "ffprobe", "-v", "error", "-select_streams", "v:0",
             "-show_entries", "format=duration", "-of", "csv=p=0", file_path
         ]
-        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        print(" ".join(command))
+        result = subprocess.run(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8"  # 显式指定编码
+        )
         
+        # 检查 ffprobe 是否成功执行
         if result.returncode != 0:
             raise RuntimeError(f"ffprobe 执行失败: {result.stderr.strip()}")
         
+        # 检查 stdout 是否为空
+        if result.stdout is None or result.stdout.strip() == "":
+            raise RuntimeError(f"ffprobe 输出为空: {result.stderr.strip()}")
+
         # 解析时长并保留 3 位小数
         duration = float(result.stdout.strip())
         return round(duration, 3)
     except Exception as e:
         print(f"发生错误: {e}")
         return None
+    
 
+def get_mp4_duration_cv2(file_path):
+    """
+    使用 OpenCV (cv2) 获取 MP4 视频的总时长（秒），精确到小数点后 3 位。
+
+    :param file_path: str, MP4 文件路径
+    :return: float, 视频时长（秒）
+    """
+    try:
+        # 确保路径为绝对路径
+        file_path = os.path.abspath(file_path)
+
+        # 打开视频文件
+        cap = cv2.VideoCapture(file_path)
+
+        if not cap.isOpened():
+            raise RuntimeError(f"无法打开视频文件: {file_path}")
+
+        # 获取视频的帧数和帧率
+        frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT)  # 视频的总帧数
+        fps = cap.get(cv2.CAP_PROP_FPS)  # 视频的帧率
+
+        # 计算视频时长（秒）
+        duration = frame_count / fps
+
+        # 释放视频捕获对象
+        cap.release()
+
+        # 保留 3 位小数
+        return round(duration, 3)
+    except Exception as e:
+        print(f"发生错误: {e}")
+        return None
+    
 def calculate_based_on_length(input_str: str) -> int:
     """
     根据字符串长度返回对应的值：

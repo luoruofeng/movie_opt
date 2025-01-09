@@ -5,7 +5,7 @@ import sys
 import cv2
 import re
 from movie_opt.utils import *
-from datetime import datetime, timedelta
+import logging
 
 def get_video_w_h(video_path):
     """使用 OpenCV 获取视频的分辨率"""
@@ -150,6 +150,9 @@ def video_segment(args):
         os.makedirs(output_dir)
         print(f"创建文件夹: {output_dir}")
 
+
+    logging.info("segment_json:\n%s\n", segment_json)
+
     # 对 segment_json 中的每个片段处理视频
     for segment in segment_json:
         output_filename = os.path.join(output_dir, f"{segment['filename']}." + video_extend)
@@ -170,6 +173,8 @@ def video_segment(args):
                     "-i", video,
                     "-ss", f"{start_seconds:.3f}",
                     "-to", f"{end_seconds:.3f}",
+                    # "-c", "copy",  # 保留所有轨道，包括字幕
+                    # "-map", "0",   # 确保保留所有轨道
                     output_filename
                 ]
                 
@@ -178,8 +183,8 @@ def video_segment(args):
                 print(f"成功截取片段: {output_filename}")
             except subprocess.CalledProcessError as e:
                 print(f"截取片段失败: {output_filename}, 错误: {e}")
-
-
+    
+    
 def convert_to_seconds(timestamp):
     """
     将时间戳 (hh:mm:ss,ms) 转换为以秒为单位的浮点数。
@@ -207,6 +212,8 @@ def split_video(args):
     print(f"输入视频文件: {video}")
     print(f"视频扩展名: {video_extend}")
 
+    video_extension = get_file_extension(video)
+
     splite_endtime_json = {}
 
     if srt_path.endswith(".srt"):
@@ -230,6 +237,8 @@ def split_video(args):
                     # splite_endtime_json[content] = end_time
 
         print(f"提取的字幕时间和内容: {splite_endtime_json}")
+        
+        logging.info("srt_path:%s\nsplite_endtime_json:\n%s\n",srt_path, splite_endtime_json)
 
         video_name = os.path.splitext(os.path.basename(video))[0]
         screenshots_dir = os.path.join(os.path.dirname(video), "每行截图-"+video_name)
@@ -258,13 +267,13 @@ def split_video(args):
 
         video_name, _ = os.path.splitext(os.path.basename(video))
 
-        # 按照行字幕分段原视频
+        # 按照行字幕-分段原视频
         id = 1
         for content, times in splite_endtime_json.items():
             start_time = times["st"]
             end_time = times["et"]
 
-            split_name = f"{video_name}-{id}.mp4"
+            split_name = f"{video_name}-{id}{video_extension}"
             output_path = os.path.join(video_split_dir, split_name)
 
             start_seconds = convert_to_seconds(start_time)
@@ -280,6 +289,8 @@ def split_video(args):
                 "-i", video,
                 "-ss", f"{start_seconds:.3f}",
                 "-to", f"{end_seconds:.3f}",
+                # "-c", "copy",  # 保留所有轨道，包括字幕
+                # "-map", "0",   # 确保保留所有轨道
                 output_path
             ]
 
@@ -290,7 +301,7 @@ def split_video(args):
 
 
         
-        # 按照行分段原视频(上一行字幕的结束到这一行字幕的开始)
+        # 按照行分段原视频-完整视频(上一行字幕的结束到这一行字幕的开始)
         id = 1
         st = "00:00:00,000"
         # 将字典的键值对转换为列表
@@ -303,7 +314,7 @@ def split_video(args):
                 end_time = times["et"]
             
 
-            split_name = f"{video_name}-{id}.mp4"
+            split_name = f"{video_name}-{id}{video_extension}"
             output_path = os.path.join(video_split_complete_dir, split_name)
 
             start_seconds = convert_to_seconds(st)
@@ -322,6 +333,8 @@ def split_video(args):
                 "-i", video,
                 "-ss", f"{start_seconds:.3f}",
                 "-to", f"{end_seconds:.3f}",
+                # "-c", "copy",  # 保留所有轨道，包括字幕
+                # "-map", "0",   # 确保保留所有轨道
                 output_path
             ]
 
@@ -342,7 +355,7 @@ def split_video(args):
 
 
             # 若改行字幕少于20个字符不生成跟读视频
-            if len(content) < 65:
+            if len(content) < 15:
                 continue
 
 
@@ -522,16 +535,16 @@ def split_video(args):
             end_seconds = convert_to_seconds(attr["et"])
             # ffmpeg -y -i "C:\Users\luoruofeng\Desktop\test\视频片段\Lion King 2 1998-en@cn-3.mkv" -ss 5 -vframes 1 -vf scale=320:-1 -q:v 2 "C:\Users\luoruofeng\Desktop\test\视频片段\每行截图\Lion King 2 1998-en@cn-3-1.jpg"
             command = [
-                "ffmpeg", "-y", "-i", video, "-ss", str(end_seconds-0.5), "-vframes", "1","-q:v", "2", screenshot_path
+                "ffmpeg", "-y", "-i", video, "-ss", str(end_seconds-0.4), "-vframes", "1","-q:v", "2", screenshot_path
             ]
-            print(f"执行命令: {' '.join(command)}")
+            print(f"执行命令 创建每行所需要的截图: {' '.join(command)}")
             subprocess.run(command)
 
             print(f"生成截图: {screenshot_path}")
 
 
             #创建每行儿童发音视频
-            child_name = f"{video_name}-{id_counter}.mp4"
+            child_name = f"{video_name}-{id_counter}{video_extension}"
             child_path = os.path.join(video_child_dir, child_name)
 
             command = [
@@ -546,14 +559,16 @@ def split_video(args):
                 child_path                             # 输出文件路径
             ]
 
-            print(f"执行命令: {' '.join(command)}")
+            print(f"执行命令 创建每行儿童发音视频: {' '.join(command)}")
             subprocess.run(command)
 
             print(f"生成视频片段: {child_path}")
-
+            #添加 “宝宝慢速” 到视频
+            add_text_to_video(child_path,"宝宝慢速")
+            logging.info(f"创建行视频-宝宝慢速 {child_path} {' '.join(command)}")
 
             #创建每行中文视频
-            cn_name = f"{video_name}-{id_counter}.mp4"
+            cn_name = f"{video_name}-{id_counter}{video_extension}"
             cn_path = os.path.join(video_cn_dir, cn_name)
 
             command = [
@@ -568,16 +583,17 @@ def split_video(args):
                 cn_path                             # 输出文件路径
             ]
 
-            print(f"执行命令: {' '.join(command)}")
+            print(f"执行命令 创建每行中文视频: {' '.join(command)}")
             subprocess.run(command)
-
             print(f"生成视频片段: {cn_path}")
-
+            #添加 “中文” 到视频
+            add_text_to_video(cn_path,"中文")
+            logging.info(f"创建行视频-中文 {cn_path} {' '.join(command)}")
 
 
 
             #创建每行发音视频
-            clip_name = f"{video_name}-{id_counter}.mp4"
+            clip_name = f"{video_name}-{id_counter}{video_extension}"
             clip_path = os.path.join(video_clips_dir, clip_name)
 
             command = [
@@ -592,14 +608,16 @@ def split_video(args):
                 clip_path                             # 输出文件路径
             ]
 
-            print(f"执行命令: {' '.join(command)}")
+            print(f"执行命令 创建每行发音视频: {' '.join(command)}")
             subprocess.run(command)
-
             print(f"生成视频片段: {clip_path}")
+            #添加 “美音慢速” 到视频
+            add_text_to_video(clip_path,"英音慢速")
+            logging.info(f"创建行视频-英音慢速 {clip_path} {' '.join(command)}")
 
 
             #创建每行发音视频2
-            clip_name = f"{video_name}-{id_counter}.mp4"
+            clip_name = f"{video_name}-{id_counter}{video_extension}"
             clip_path2 = os.path.join(video_clips_dir2, clip_name)
 
             command = [
@@ -614,23 +632,18 @@ def split_video(args):
                 clip_path2                             # 输出文件路径
             ]
 
-            print(f"执行命令: {' '.join(command)}")
+            print(f"执行命令 创建每行发音视频2: {' '.join(command)}")
             subprocess.run(command)
 
             print(f"生成视频片段: {clip_path2}")
+            #添加 “美音慢速” 到视频
+            add_text_to_video(clip_path2,"美音慢速")
+            logging.info(f"创建行视频-美音慢速 {clip_path2} {' '.join(command)}")
             
             
 
             #创建每行跟读视频
-            command = [
-                "ffmpeg", "-y", "-i", video, "-ss", str(end_seconds-0.5), "-vframes", "1","-q:v", "2", screenshot_path
-            ]
-            print(f"执行命令: {' '.join(command)}")
-            subprocess.run(command)
-
-            print(f"生成截图: {screenshot_path}")
-
-            empty_name = f"{video_name}-{id_counter}.mp4"
+            empty_name = f"{video_name}-{id_counter}{video_extension}"
             empty_path = os.path.join(video_empty_dir, empty_name)
             
             follow = os.path.join(os.path.dirname(resource_filename(__name__,".")),'static', "follow.mp3")
@@ -674,10 +687,12 @@ def split_video(args):
                 empty_path                             # 输出文件路径
             ]
 
-            print(f"执行命令: {' '.join(command)}")
+            print(f"执行命令 跟读: {' '.join(command)}")
             subprocess.run(command)
-
-            print(f"生成视频片段: {clip_path}")
+            print(f"生成视频 {empty_path}")
+            #添加 “跟读” 到视频
+            add_text_to_video(empty_path,"跟读")
+            logging.info(f"创建行视频-跟读 {empty_path} {' '.join(command)}")
 
             #删除句子朗读
             safe_remove(content_voice, "生成视频片段")

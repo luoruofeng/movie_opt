@@ -6,9 +6,11 @@ from TTS.api import TTS
 from pkg_resources import resource_filename
 from gtts import gTTS
 import asyncio
+import logging
 import edge_tts
+import re
 
-def edge_tts_voice(args): 
+def edge_tts_voice(args):
     # 获取参数内容
     content = args.content
     save_path = args.save_path
@@ -27,6 +29,8 @@ def edge_tts_voice(args):
             voice = "en-US-AnaNeural"  # 默认儿童英文
         elif language == "zh-cn":
             voice = "zh-CN-XiaoxiaoNeural"  # 默认中文
+        elif language == "zh-tw":
+            voice = "zh-TW-HsiaoChenNeural"  # 默认台湾中文
         else:
             raise ValueError(f"Unsupported language: {language}")
 
@@ -35,16 +39,22 @@ def edge_tts_voice(args):
         raise ValueError("Content cannot be empty")
 
     # 异步任务：语音合成
-    async def run_tts():
-        try:
-            communicate = edge_tts.Communicate(content, voice)
-            await communicate.save(save_path)
-            print(f"Audio saved successfully at {save_path}")
-        except Exception as e:
-            print(f"Error occurred during TTS: {e}")
+    async def run_tts_with_retry():
+        retries = 3
+        for attempt in range(1, retries + 1):
+            try:
+                communicate = edge_tts.Communicate(content, voice)
+                await communicate.save(save_path)
+                print(f"Audio saved successfully at {save_path}")
+                return
+            except Exception as e:
+                logging.error(f"Attempt {attempt} failed: {e}")
+                if attempt == retries:
+                    raise RuntimeError(f"Failed to generate TTS after {retries} attempts")
 
     # 同步执行语音合成
-    asyncio.run(run_tts())
+    asyncio.run(run_tts_with_retry())
+
 
 def gtts_voice(args): 
     # 获取参数内容

@@ -4,7 +4,7 @@ from pathlib import Path
 import re
 from movie_opt.utils import *
 from pkg_resources import resource_filename
-
+import logging
 import os
 
 def extract_parts(file_path: str):
@@ -120,6 +120,7 @@ def merge1_diff_type(args,type):
         ]
         return merge_mp4(args, folder_types,"磨耳朵")
 
+    # 合并视频-最终
     if type == 4:
         if args.cnen_c is None or len(args.cnen_c) <= 0:
             print("中英对照内容不能为空")
@@ -132,10 +133,13 @@ def merge1_diff_type(args,type):
         if args.follow_c is None or len(args.follow_c) <= 0:
             print("跟读内容不能为空")
             return
+        
 
-        cnen_h = os.path.join(os.path.dirname(resource_filename(__name__,".")),'static', "中英对照横屏.mp4")
-        ear_h = os.path.join(os.path.dirname(resource_filename(__name__,".")),'static', "磨耳朵横屏.mp4")
-        follow_h = os.path.join(os.path.dirname(resource_filename(__name__,".")),'static', "跟读横屏.mp4")
+        file_extension = get_file_extension(args.cnen_c[0])
+
+        cnen_h = os.path.join(os.path.dirname(resource_filename(__name__,".")),'static', "中英对照横屏"+file_extension)
+        ear_h = os.path.join(os.path.dirname(resource_filename(__name__,".")),'static', "磨耳朵横屏"+file_extension)
+        follow_h = os.path.join(os.path.dirname(resource_filename(__name__,".")),'static', "跟读横屏"+file_extension)
         
         output_dir = os.path.join(args.path, "合并视频-最终")
         os.makedirs(output_dir, exist_ok=True)
@@ -167,6 +171,8 @@ def merge1_diff_type(args,type):
             resize_video(ear_c,w,h)
 
             merge_video = [cnen_h, cnen_c, follow_h, follow_c, ear_h, ear_c]
+            logging.info(f"merge_video:{merge_video}")
+            video_extension = get_file_extension(cnen_c)
 
             video_output_dir = os.path.join(output_dir, str(video_index))
             os.makedirs(video_output_dir, exist_ok=True)
@@ -175,29 +181,30 @@ def merge1_diff_type(args,type):
                 for mv in merge_video:
                     merge_list.write(f"file '{mv}'\n")
 
+            # TODO
             # 修改视频的时间戳timescale，保证视频拼接后不卡顿
             for video in merge_video:
-                change_timescale(video)
-
-
+                change_timescale(video,file_extension=video_extension)
             # 统一音频编码和参数，保证视频拼接后有声音
             normalize_audio(merge_video)
 
             # 使用 ffmpeg 拼接视频
-            output_video = os.path.join(video_output_dir, f"{video_index}.mp4")
+            output_video = os.path.join(video_output_dir, f"{video_index}{video_extension}")
             try:
-                subprocess.run(
-                    [
+                command = [
                         "ffmpeg",
                         "-f", "concat",
                         "-safe", "0",
                         "-i", merge_list_path,
                         "-c","copy",
                         output_video,
-                    ],
+                    ]
+                print(" ".join(command))
+                subprocess.run(
+                    command,
                     check=True
                 )
-                print(f"合并完成: {output_video}")
+                print(f"合并最终视频完成: {output_video}")
             except subprocess.CalledProcessError as e:
                 print(f"合并失败: {output_video}")
                 print(f"错误信息: {e}")
@@ -220,12 +227,12 @@ def merge_mp4(args, folder_types, video_type):
     # 遍历目录及其子目录
     for root, dirs, files in os.walk(path):
         for file in files:
-            if file.lower().endswith(".mp4"):
+            if file.lower().endswith(".mp4") or file.lower().endswith(".mkv") :
                 # 获取文件的绝对路径
                 full_path = os.path.abspath(os.path.join(root, file))
                 all_video.append(full_path)
 
-    print(f"{path} 找到 {len(all_video)} 个 MP4 文件：")
+    print(f"{path} 找到 {len(all_video)} 个 视频 文件：")
     for video in all_video:
         print(video)
 
@@ -257,7 +264,7 @@ def merge_mp4(args, folder_types, video_type):
         os.makedirs(output_dir, exist_ok=True)
         
         # 定义正则表达式模式
-        pattern = re.compile(rf"\\[^\\]*-(.*?)-{folder_index}\\.*\.mp4$")
+        pattern = re.compile(rf"\\[^\\]*-(.*?)-{folder_index}\\.*\..*$")
 
         # 过滤文件路径
         same_folder_index_videos = [
@@ -277,7 +284,7 @@ def merge_mp4(args, folder_types, video_type):
         sorted_videos = []
 
         # 定义正则表达式提取文件夹类型和视频序号
-        pattern = re.compile(r".*\\(.*?)-.*\\.*-(\d+)\.mp4$")
+        pattern = re.compile(r".*\\(.*?)-.*\\.*-(\d+)\..*$")
 
         # 如果 video 不在 folder_types 范围中，删除该元素
         filtered_videos = []
@@ -324,19 +331,18 @@ def merge_mp4(args, folder_types, video_type):
             for video in sorted_videos:
                 merge_list.write(f"file '{video}'\n")
 
+        video_extension = get_file_extension(sorted_videos[0])
+
         # 修改视频的时间戳timescale，保证视频拼接后不卡顿
         for video in sorted_videos:
             change_timescale(video)
-
-
         # 统一音频编码和参数，保证视频拼接后有声音
         normalize_audio(sorted_videos)
 
         # 使用 ffmpeg 拼接视频
-        output_video = os.path.join(output_dir, f"{movie_name}-{folder_index}.mp4")
+        output_video = os.path.join(output_dir, f"{movie_name}-{folder_index}{video_extension}")
         try:
-            subprocess.run(
-                [
+            command = [
                     "ffmpeg",
                     "-f", "concat",
                     "-safe", "0",
@@ -344,9 +350,12 @@ def merge_mp4(args, folder_types, video_type):
                     "-c","copy",
                     output_video,
                 ],
+            print(" ".join(command))
+            subprocess.run(
+                command,
                 check=True
             )
-            print(f"合并完成: {output_video}")
+            print(f"合并每行完成: {output_video}")
         except subprocess.CalledProcessError as e:
             print(f"合并失败: {output_video}")
             print(f"错误信息: {e}")

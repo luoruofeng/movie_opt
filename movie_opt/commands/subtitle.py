@@ -19,8 +19,8 @@ PlayDepth: 0
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Chinese,SimSun,15,&H00FFFFFF,&H00000000,&H00000000,&H80000000,1,0,0,0,100,100,0,0,3,1,0,1,10,10,10,1
-Style: English,Arial,21,&H00FFFFFF,&H00000000,&H00000000,&H80000000,1,0,0,0,100,100,0,0,1,1,0,1,10,10,10,1
+Style: Chinese,Alibaba Sans Bold,31,&H00FFFFFF,&H00000000,&H00000000,&H00FFFFFF,1,0,0,0,100,100,0,0,3,4,0,2,10,10,10,1
+Style: English,AlibabaSans-HeavyItalic,41,&H00FFFFFF,&H00000000,&H00000000,&H00FFFFFF,1,0,0,0,100,100,0,0,1,4,0,2,10,10,10,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -128,39 +128,35 @@ def addass(args):
         return
 
     # 遍历目录中的所有 ASS 文件和视频文件
-    ass_files = {os.path.splitext(file)[0]: os.path.join(path, file)
-                 for file in os.listdir(path) if file.endswith(".ass")}
-    video_files = {os.path.splitext(file)[0]: os.path.join(path, file)
+    ass_files = [os.path.join(path, file)
+                 for file in os.listdir(path) if file.endswith(".ass")]
+    video_files = [os.path.join(path, file)
                    for file in os.listdir(path)
-                   if file.endswith((".mp4", ".mkv", ".avi", ".mov"))}
+                   if file.endswith((".mp4", ".mkv", ".avi", ".mov"))]
 
-    # 为每个视频文件添加对应的字幕
-    for video_name, video_path in video_files.items():
-        if video_name in ass_files:
-            ass_path = ass_files[video_name]
-            
-            # 获取原视频文件的扩展名
-            video_extension = os.path.splitext(video_path)[1]
-            output_path = os.path.join(path, f"{video_name}_subtitled{video_extension}")
+    ass_path = ass_files[0]
+    video_path = video_files[0]
+    video_name = os.path.basename(video_path)
 
-            # 将路径标准化为相对路径
-            relative_ass_path = os.path.relpath(ass_path, start=path)
-            relative_video_path = os.path.relpath(video_path, start=path)
-            relative_output_path = os.path.relpath(output_path, start=path)
-            
-            # 使用 ffmpeg 添加字幕
-            command = [
-                'ffmpeg', '-i', relative_video_path, '-vf', f"ass={relative_ass_path}",
-                '-c:a', 'copy', relative_output_path
-            ]
-            try:
-                subprocess.run(command, check=True, cwd=path)  # 指定 cwd 为 path，确保相对路径正确
-                print(f"已为视频 {video_name} 添加字幕，保存为 {output_path}")
-            except subprocess.CalledProcessError as e:
-                print(f"添加字幕失败: {e}")
-        else:
-            print(f"未找到与视频 {video_name} 对应的 ASS 文件，跳过处理")
+    # 获取原视频文件的扩展名
+    video_extension = os.path.splitext(video_path)[1]
+    output_path = os.path.join(path, f"subtitle_{video_name}")
 
+    # 将路径标准化为相对路径
+    relative_ass_path = os.path.relpath(ass_path, start=path)
+    relative_video_path = os.path.relpath(video_path, start=path)
+    relative_output_path = os.path.relpath(output_path, start=path)
+    
+    # 使用 ffmpeg 添加字幕
+    command = [
+        'ffmpeg', '-i', relative_video_path, '-vf', f"ass={relative_ass_path}",
+        '-c:a', 'copy', relative_output_path
+    ]
+    try:
+        subprocess.run(command, check=True, cwd=path)  # 指定 cwd 为 path，确保相对路径正确
+        print(f"已为视频 {video_name} 添加字幕，保存为 {output_path}")
+    except subprocess.CalledProcessError as e:
+        print(f"添加字幕失败: {e}")
 
 
 
@@ -647,11 +643,24 @@ def convert_time(args):
     if not os.path.exists(path):
         print(f"路径不存在: {path}")
         return
+    
+    def process_srt(file_path):
+        """
+        对单个 .srt 文件进行操作的核心逻辑。
+        :param file_path: .srt 文件路径
+        """
+        print(f"Processing: {file_path}")
+        print(f"正在处理文件: {file_name}")
+        adjust_srt_file(file_path)
+        print(f"已完成文件: {file_name}")
 
-    # 遍历目录中的所有 SRT 文件
-    for file_name in os.listdir(path):
-        if file_name.endswith(".srt"):
-            file_path = os.path.join(path, file_name)
-            print(f"正在处理文件: {file_name}")
-            adjust_srt_file(file_path)
-            print(f"已完成文件: {file_name}")
+    if os.path.isdir(path):
+        # 遍历目录中的所有 SRT 文件
+        for file_name in os.listdir(path):
+            if file_name.endswith(".srt"):
+                process_srt(os.path.join(path, file_name))
+    elif os.path.isfile(path) and path.lower().endswith('.srt'):
+        # 如果是单个 .srt 文件路径
+        process_srt(path)
+    else:
+        print("输入的路径无效或不包含 .srt 文件！")

@@ -101,9 +101,9 @@ movie_opt.exe picture split_video   --srt_path="C:\Users\luoruofeng\Desktop\test
 ```
 
 
-# 将srt文件的第一行字幕改为00:00:00.000开始
+# 将srt文件的第一行字幕改为00:00:00,000开始
 ```
-movie_opt.exe subtitle convert_time   --path="C:\Users\luoruofeng\Desktop\test\srt分段"
+movie_opt.exe subtitle convert_time --path="C:\Users\luoruofeng\Desktop\test\srt分段"
 ```
 
 
@@ -117,3 +117,16 @@ movie_opt.exe merge merge1  --path="C:\Users\luoruofeng\Desktop\test\视频片�
 ```
 movie_opt.exe custom custom1  --path="C:\Users\luoruofeng\Desktop\test2"  --segment_second=8
 ```
+
+
+# pdf转txt
+```
+movie_opt.exe pdf pdf_to_txt_pdfplumber --path="C:\Users\luoruofeng\Desktop\test5"
+```
+
+
+# txt转mp3
+```
+movie_opt.exe pdf split_sentences_2voice --path="C:\Users\luoruofeng\Desktop\test5"
+```
+

@@ -1,3 +1,16 @@
+import logging
+
+def setup_logging():
+    logging.basicConfig(
+        filename='movie_opt.log',
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S',
+        encoding='utf-8'
+    )
+
+setup_logging()
+
 import argparse
 from movie_opt.commands.create import create_pc, create_phone
 from movie_opt.commands.subtitle import  convert_time, srtsegment, srt2ass, addass, mergesrt, sequencesrt, srt2txtpng
@@ -5,8 +18,10 @@ from movie_opt.commands.picture import split_video, video_segment, cut_pc2phone,
 from movie_opt.commands.ai import get_hard_words_and_set_color
 from movie_opt.commands.translate import find_db_word
 from movie_opt.commands.voice import  edge_tts_voice, gtts_voice, youdao_voice, create_mp3_by_clone_voice, clone_voice_conversion
+from movie_opt.commands.pdf import pdf_to_txt_pdfplumber, split_sentences_2voice
 from movie_opt.commands.merge import merge1
 from movie_opt.commands.custom import custom1
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -184,6 +199,23 @@ def main():
     subparser_custom_custom1.add_argument("--path", required=True, help="包含子文件夹的路径")
     subparser_custom_custom1.add_argument("--segment_second", required=False, help="间隔秒数分段依据")
     subparser_custom_custom1.set_defaults(func=custom1)
+
+
+    #Command pdf
+    parser_pdf = subparsers.add_parser("pdf", help="pdf操作")
+    subparser_pdf = parser_pdf.add_subparsers(dest="subcommand", help="pdf命令的子命令")
+    
+    # Command pdf -> Subcommand pdf_to_txt_pdfplumber
+    subparser_pdf_pdf_to_txt_pdfplumber = subparser_pdf.add_parser("pdf_to_txt_pdfplumber", help="pdf转txt")
+    subparser_pdf_pdf_to_txt_pdfplumber.add_argument("--path", required=True, help="pdf文件或是包含了pdf文件的文件夹的路径")
+    subparser_pdf_pdf_to_txt_pdfplumber.set_defaults(func=pdf_to_txt_pdfplumber)
+
+    # Command pdf -> Subcommand split_sentences_2voice
+    subparser_pdf_split_sentences_2voice = subparser_pdf.add_parser("split_sentences_2voice", help="txt转mp3")
+    subparser_pdf_split_sentences_2voice.add_argument("--path", required=True, help="txt文件或是包含了txt文件的文件夹的路径")
+    subparser_pdf_split_sentences_2voice.set_defaults(func=split_sentences_2voice)
+
+    
 
 
     # and more ...
