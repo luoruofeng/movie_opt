@@ -378,9 +378,9 @@ def pdf_to_txt_pdfplumber(args):
         return
 
 
-# import argparse
-# args = argparse.Namespace()
-# args.path = r"C:\Users\luoruofeng\Desktop\test5"
-# if __name__ == "__main__":
-#     pdf_to_txt_pdfplumber(args)
-#     split_sentences_2voice(args)
+import argparse
+args = argparse.Namespace()
+args.path = r"C:\Users\luoruofeng\Desktop\test5"
+if __name__ == "__main__":
+    pdf_to_txt_pdfplumber(args)
+    split_sentences_2voice(args)
