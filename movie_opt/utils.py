@@ -10,6 +10,28 @@ import cv2
 from pkg_resources import resource_filename
 import logging
 
+def delete_txt_files(folder_path):
+    """
+    递归删除指定文件夹及其子文件夹中的所有 .txt 文件。
+
+    :param folder_path: 要操作的文件夹路径
+    """
+    if not os.path.exists(folder_path):
+        print(f"路径不存在: {folder_path}")
+        return
+    
+    # 遍历文件夹中的所有文件和子文件夹
+    for root, dirs, files in os.walk(folder_path):
+        for file in files:
+            # 检查文件扩展名是否为 .txt
+            if file.endswith(".txt"):
+                file_path = os.path.join(root, file)
+                try:
+                    os.remove(file_path)
+                    print(f"删除文件: {file_path}")
+                except Exception as e:
+                    print(f"无法删除文件 {file_path}: {e}")
+
 def add_text_to_video(input_file, text):
     """
     在视频中添加文字，先保存到临时文件，再将临时文件替换原视频文件

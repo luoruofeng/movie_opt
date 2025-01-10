@@ -8,7 +8,27 @@ from gtts import gTTS
 import asyncio
 import logging
 import edge_tts
-import re
+
+def change_4_edge_tts_voice(content):
+        # Define the punctuation replacements
+    punctuation_replacements = {
+        '：': '，',  # Chinese colon to Chinese comma
+        '、': '，',  # Chinese enumerator to Chinese comma
+        '？': '，',  # Chinese question mark to Chinese comma
+        '；': '，',  # Chinese semicolon to Chinese comma
+        '！': '，',  # Chinese exclamation mark to Chinese comma
+        ':': ',',   # English colon to English comma
+        ',': ',',   # English comma remains unchanged
+        '?': ',',   # English question mark to English comma
+        ';': ',',   # English semicolon to English comma
+        '!': ',',   # English exclamation mark to English comma
+    }
+
+    # Replace the punctuation marks
+    for old_punct, new_punct in punctuation_replacements.items():
+        content = content.replace(old_punct, new_punct)
+    return content
+
 
 def edge_tts_voice(args):
     # 获取参数内容
@@ -16,6 +36,11 @@ def edge_tts_voice(args):
     save_path = args.save_path
     language = args.language
     voice = args.voice
+
+    
+    # 检查内容是否为空
+    if not content:
+        raise ValueError("Content cannot be empty")
 
     # 设置默认语言为英文
     if language is None:
@@ -34,13 +59,14 @@ def edge_tts_voice(args):
         else:
             raise ValueError(f"Unsupported language: {language}")
 
-    # 检查内容是否为空
-    if not content:
-        raise ValueError("Content cannot be empty")
+    # 如果是中文将 一些特殊标点符号替换为逗号 以便断句
+    if voice.split('-')[0] == "zh":
+        content = change_4_edge_tts_voice(content)
+
 
     # 异步任务：语音合成
     async def run_tts_with_retry():
-        retries = 3
+        retries = 10
         for attempt in range(1, retries + 1):
             try:
                 communicate = edge_tts.Communicate(content, voice)

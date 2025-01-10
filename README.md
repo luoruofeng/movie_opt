@@ -107,9 +107,20 @@ movie_opt.exe subtitle convert_time --path="C:\Users\luoruofeng\Desktop\test\srt
 ```
 
 
-# 拼接“1中英文对照 2跟读 3磨耳朵”视频
+# 逐行拼接“1中英文对照 2跟读 3磨耳朵”视频
 ```
 movie_opt.exe merge merge1  --path="C:\Users\luoruofeng\Desktop\test\视频片段"
+```
+
+
+# 相同编号的“1中英文对照 2跟读 3磨耳朵”视频拼接起来
+```
+movie_opt.exe merge merge2  --path="C:\Users\luoruofeng\Desktop\test\视频片段"
+```
+
+# 将 所有“中英文对照”， 所有“跟读”， 所有“磨耳朵”视频拼接起来,形成三部完整的电影
+```
+movie_opt.exe merge merge3  --path="C:\Users\luoruofeng\Desktop\test\视频片段"
 ```
 
 

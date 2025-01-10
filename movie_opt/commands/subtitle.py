@@ -19,8 +19,8 @@ PlayDepth: 0
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Chinese,Alibaba Sans Bold,31,&H00FFFFFF,&H00000000,&H00000000,&H00FFFFFF,1,0,0,0,100,100,0,0,3,4,0,2,10,10,10,1
-Style: English,AlibabaSans-HeavyItalic,41,&H00FFFFFF,&H00000000,&H00000000,&H00FFFFFF,1,0,0,0,100,100,0,0,1,4,0,2,10,10,10,1
+Style: Chinese,Alibaba Sans Bold,27,&H00FFFFFF,&H00000000,&H00000000,&H00FFFFFF,1,0,0,0,100,100,0,0,3,4,0,2,10,10,10,1
+Style: English,AlibabaSans-HeavyItalic,31,&H00FFFFFF,&H00000000,&H00000000,&H00FFFFFF,1,0,0,0,100,100,-2,0,1,4,0,2,10,10,10,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -389,7 +389,7 @@ def create_png_with_text(text, output_path):
 
     # 自动换行处理文本
     margin = 10
-    line_spacing = 4  # 行间距
+    line_spacing = 1  # 行间距
     wrapped_text = wrap_text(text, draw, font, image_width - 2 * margin)
 
     # 计算文字总高度

@@ -3,7 +3,7 @@ import sys
 import subprocess
 from movie_opt.utils import *
 import re
-
+from movie_opt.commands.merge import delete_folders_except_merge
 
 def custom1(args):
     segment_second = args.segment_second
@@ -36,7 +36,7 @@ def custom1(args):
                     "--path="+subdir_path
                 ]
                 print(f"执行命令: {' '.join(command)}")
-                subprocess.run(command,check=True)
+                #subprocess.run(command,check=True)
                 
                 print("给视频添加ass字幕")
                 command = [
@@ -46,7 +46,7 @@ def custom1(args):
                     "--path="+subdir_path
                 ]
                 print(f"执行命令: {' '.join(command)}")
-                subprocess.run(command,check=True)
+                #subprocess.run(command,check=True)
 
                 print("srt字幕内容转png图片")
                 command = [
@@ -56,7 +56,7 @@ def custom1(args):
                     "--path="+subdir_path
                 ]
                 print(f"执行命令: {' '.join(command)}")
-                subprocess.run(command,check=True)
+                #subprocess.run(command,check=True)
 
                 
                 print("将srt文件安装时间间隔分段保存为新的srt文件")
@@ -68,7 +68,7 @@ def custom1(args):
                     "--second="+segment_second
                 ]
                 print(f"执行命令: {' '.join(command)}")
-                subprocess.run(command,check=True)
+                #subprocess.run(command,check=True)
 
                 #-----------------------------------------
                 # movie_opt.exe picture video_segment   --srt_path="C:\Users\luoruofeng\Desktop\test\srt分段" --video_path="C:\Users\luoruofeng\Desktop\test\test_subtitled.mkv"
@@ -87,7 +87,7 @@ def custom1(args):
                     "--video_path="+v,
                 ]
                 print(f"执行命令: {' '.join(command)}")
-                subprocess.run(command,check=True)
+                #subprocess.run(command,check=True)
                 
                 # 将srt文件的第一行字幕改为00:00:00.000开始
                 print("将srt文件安装时间间隔分段保存为新的srt文件")
@@ -98,7 +98,7 @@ def custom1(args):
                     "--path="+srt_segment_folder
                 ]
                 print(f"执行命令: {' '.join(command)}")
-                subprocess.run(command,check=True)
+                #subprocess.run(command,check=True)
                 
 
                 # movie_opt.exe picture split_video   --srt_path="C:\Users\luoruofeng\Desktop\test\srt分段2\Lion King 2 1998-en@cn-3.srt"  --video_path="C:\Users\luoruofeng\Desktop\test\视频片段\Lion King 2 1998-en@cn-3.mkv"
@@ -126,10 +126,53 @@ def custom1(args):
                                     "--video_path="+os.path.join(video_segment_folder,get_filename_without_extension(file_name)+video_extension),
                                 ]
                                 print(f"执行命令: {' '.join(command)}")
-                                subprocess.run(command,check=True)
+                                #subprocess.run(command,check=True)
                     except Exception as e:
                         print(f"按照字幕行，生成视频中每一句的朗读视频和跟读视频处理 {file_name} 时出错，错误: {str(e)}")
                         continue
+                
+                
+                
+                # 逐行拼接“1中英文对照 2跟读 3磨耳朵”视频
+                logging.info(f"逐行拼接“1中英文对照 2跟读 3磨耳朵”视频\n{'-'*22}")
+                command = [
+                    c,
+                    "merge", 
+                    "merge1", 
+                    "--path="+video_segment_folder
+                ]
+                print(f"执行命令: {' '.join(command)}")
+                # subprocess.run(command,check=True)   
+                
+
+                # 相同编号的“1中英文对照 2跟读 3磨耳朵”视频拼接起来
+                logging.info(f"相同编号的“1中英文对照 2跟读 3磨耳朵”视频拼接起来\n{'-'*22}")
+                command = [
+                    c,
+                    "merge", 
+                    "merge2", 
+                    "--path="+video_segment_folder
+                ]
+                print(f"执行命令: {' '.join(command)}")
+                # subprocess.run(command,check=True)   
+
+
+                # 将 所有“中英文对照”， 所有“跟读”， 所有“磨耳朵”视频拼接起来,形成三部完整的电影
+                logging.info(f"将 所有“中英文对照”， 所有“跟读”， 所有“磨耳朵”视频拼接起来,形成三部完整的电影\n{'-'*22}")
+                command = [
+                    c,
+                    "merge", 
+                    "merge3", 
+                    "--path="+video_segment_folder
+                ]
+                print(f"执行命令: {' '.join(command)}")
+                subprocess.run(command,check=True)   
+
+                # # 删除txt（拼接文件）
+                # delete_txt_files(video_segment_folder)
+                # # 删除其他文件夹和文件
+                # delete_folders_except_merge(video_segment_folder)
+
 
             except Exception as e:
                 print(f"处理 {subdir_path} 时出错，错误: {str(e)}")

@@ -1,11 +1,96 @@
 import os
 import subprocess
-from pathlib import Path
 import re
 from movie_opt.utils import *
 from pkg_resources import resource_filename
 import logging
-import os
+import shutil
+
+def delete_folders_except_merge(folder_path):
+    """
+    遍历删除指定文件夹下的所有子文件夹和文件，保留以“合并视频-”开头的文件夹。
+
+    :param folder_path: 要操作的文件夹路径
+    """
+    if not os.path.exists(folder_path):
+        print(f"路径不存在: {folder_path}")
+        return
+    
+    # 获取当前文件夹中的所有子文件夹和文件
+    for item in os.listdir(folder_path):
+        item_path = os.path.join(folder_path, item)
+        
+        if os.path.isdir(item_path):
+            # 如果是文件夹且名字不是以“合并视频-”开头，则删除
+            if not item.startswith("合并视频-"):
+                try:
+                    shutil.rmtree(item_path)  # 删除整个文件夹及其内容
+                    logging.info(f"删除文件夹及内容: {item_path}")
+                except Exception as e:
+                    logging.error(f"无法删除文件夹 {item_path}: {e}")
+        elif os.path.isfile(item_path):
+            # 删除当前文件夹下的文件
+            try:
+                os.remove(item_path)
+                logging.info(f"删除文件: {item_path}")
+            except Exception as e:
+                logging.error(f"无法删除文件 {item_path}: {e}")
+
+
+def sort_paths_by_last_number(paths):
+    """
+    根据文件名最后一个“-”后的数字对路径列表进行排序。
+    将数字从字符串转换为整数以进行比较，正序排列。
+
+    :param paths: 包含绝对路径的列表。
+    :return: 排序后的列表。
+    """
+    def extract_last_number(path):
+        """
+        从路径的文件名中提取最后一个“-”后的数字并返回其整数值。
+        """
+        file_name = os.path.basename(path)  # 提取文件名
+        if "-" in file_name:
+            try:
+                number_part = file_name.split("-")[-1]  # 获取最后一个“-”后的部分
+                number = int(os.path.splitext(number_part)[0])  # 去掉扩展名并转为整数
+                return number
+            except ValueError:
+                pass  # 如果无法转换为整数，忽略此文件名中的数字部分
+        return float('inf')  # 如果无数字，放在排序的末尾
+
+    # 按提取的数字排序
+    return sorted(paths, key=extract_last_number)
+
+
+
+def find_videos_in_special_folders(directory,dir_suffix="-中英对照"):
+    """
+    查找指定文件夹下所有子文件夹，子文件夹名字以“合并视频-”开头并以“-中英对照”结尾。
+    如果这些子文件夹下有视频文件，则将这些视频文件的绝对路径放入数组并返回。
+
+    :param directory: 指定的文件夹路径。
+    :return: 包含符合条件的视频文件绝对路径的数组。
+    """
+    video_extensions = {".mp4", ".mkv", ".avi", ".mov", ".flv"}  # 常见视频文件扩展名
+    video_paths = []
+
+    # 遍历指定目录下的所有子文件夹
+    for root, dirs, files in os.walk(directory):
+        for dir_name in dirs:
+            # 检查子文件夹名字是否符合条件
+            if dir_name.startswith("合并视频-") and dir_name.endswith(dir_suffix):
+                folder_path = os.path.join(root, dir_name)
+                
+                # 遍历该子文件夹下的所有文件
+                for file_name in os.listdir(folder_path):
+                    file_path = os.path.join(folder_path, file_name)
+                    
+                    # 检查文件是否为视频文件
+                    if os.path.isfile(file_path) and os.path.splitext(file_name)[1].lower() in video_extensions:
+                        video_paths.append(os.path.abspath(file_path))
+    
+    return video_paths
 
 def extract_parts(file_path: str):
     """
@@ -86,16 +171,68 @@ def get_file_by_suffix_number(file_paths, target_number):
     return None
 
 def merge1(args):
-    cnen_c = merge1_diff_type(args,1)
-    follow_c = merge1_diff_type(args,2)
-    ear_c = merge1_diff_type(args,3)
+    cnen_c = merge_diff_type(args,1)
+    logging.info(f"merge1:逐行拼接“中英文对照”视频完成 {cnen_c}")
 
-    args.cnen_c = cnen_c
-    args.follow_c = follow_c
-    args.ear_c = ear_c
-    r_path = merge1_diff_type(args,4)
+    follow_c = merge_diff_type(args,2)
+    logging.info(f"merge1:逐行拼接“跟读”视频完成 {follow_c}")
+    
+    ear_c = merge_diff_type(args,3)
+    logging.info(f"merge1:逐行拼接“磨耳朵”视频完成 {args.path}\n{ear_c}")
+    
 
-def merge1_diff_type(args,type):
+def merge2(args):
+    dir_path = args.path
+    args.cnen_c = sort_paths_by_last_number(find_videos_in_special_folders(dir_path,"-中英对照"))
+    args.follow_c = sort_paths_by_last_number(find_videos_in_special_folders(dir_path,"-跟读"))
+    args.ear_c = sort_paths_by_last_number(find_videos_in_special_folders(dir_path,"-磨耳朵"))
+    merge_diff_type(args,4)
+    logging.info(f"merge2:相同编号的“1中英文对照 2跟读 3磨耳朵”视频拼接起来完成 {args.path}")
+
+def merge3(args):
+    merge_same_type(args,"-中英对照")
+    merge_same_type(args,"-跟读")
+    merge_same_type(args,"-磨耳朵")
+    
+
+
+def merge_same_type(args,dir_suffix="-中英对照"):
+    dir_path = args.path
+    video_output_dir = os.path.join(dir_path, "合并视频-从头到尾")
+    video_name = dir_suffix.split("-")[-1]
+    if not os.path.exists(video_output_dir):
+        os.makedirs(video_output_dir, exist_ok=True)
+    merge_list_path = os.path.join(video_output_dir , f"merge_list.txt")
+    videos = sort_paths_by_last_number(find_videos_in_special_folders(dir_path,dir_suffix))
+    file_extension = get_file_extension(videos[0])
+    with open(merge_list_path, "w", encoding="utf-8") as merge_list:
+        for v in videos:
+            merge_list.write(f"file '{v}'\n")
+    # 使用 ffmpeg 拼接视频
+    output_video = os.path.join(video_output_dir, f"{video_name}.{file_extension}")
+    print(f"开始合成从头到尾视频 output_video: {output_video} videos:{videos}")
+    logging.info(f"开始合成从头到尾视频 output_video: {output_video} videos:{videos}")
+    try:
+        command = [
+                "ffmpeg",
+                "-f", "concat",
+                "-safe", "0",
+                "-i", merge_list_path,
+                "-c","copy",
+                output_video,
+            ]
+        print(" ".join(command))
+        subprocess.run(
+            command,
+            check=True
+        )
+        print(f"合并从头到尾视频完成: {output_video}")
+        return output_video
+    except subprocess.CalledProcessError as e:
+        print(f"错误信息: {e}")
+        logging.error(f"merge3 合并失败: {output_video} 错误信息: {e}")
+    
+def merge_diff_type(args,type):
     if type == 1:
         folder_types = [
             "每行完整视频",
@@ -206,10 +343,9 @@ def merge1_diff_type(args,type):
                 )
                 print(f"合并最终视频完成: {output_video}")
             except subprocess.CalledProcessError as e:
-                print(f"合并失败: {output_video}")
                 print(f"错误信息: {e}")
-            return output_video
-
+                logging.error(f"merge2 合并失败: {output_video} 错误信息: {e}")
+                continue
 
 def merge_mp4(args, folder_types, video_type):
     r_paths = []
@@ -348,8 +484,8 @@ def merge_mp4(args, folder_types, video_type):
                     "-safe", "0",
                     "-i", merge_list_path,
                     "-c","copy",
-                    output_video,
-                ],
+                    output_video
+                ]
             print(" ".join(command))
             subprocess.run(
                 command,
