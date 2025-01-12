@@ -37,7 +37,6 @@ def edge_tts_voice(args):
     language = args.language
     voice = args.voice
 
-    
     # 检查内容是否为空
     if not content:
         raise ValueError("Content cannot be empty")
@@ -59,12 +58,10 @@ def edge_tts_voice(args):
         else:
             raise ValueError(f"Unsupported language: {language}")
 
-    # 如果是中文将 一些特殊标点符号替换为逗号 以便断句
+    # 如果是中文将一些特殊标点符号替换为逗号以便断句
     if voice.split('-')[0] == "zh":
         content = change_4_edge_tts_voice(content)
 
-
-    # 异步任务：语音合成
     async def run_tts_with_retry():
         retries = 10
         for attempt in range(1, retries + 1):
@@ -78,8 +75,18 @@ def edge_tts_voice(args):
                 if attempt == retries:
                     raise RuntimeError(f"Failed to generate TTS after {retries} attempts")
 
-    # 同步执行语音合成
-    asyncio.run(run_tts_with_retry())
+    # 如果事件循环已存在，复用现有循环
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:  # 如果不存在事件循环，则创建新的
+        loop = None
+
+    if loop and loop.is_running():
+        # 在已有事件循环中运行任务
+        asyncio.ensure_future(run_tts_with_retry())
+    else:
+        asyncio.run(run_tts_with_retry())
+
 
 
 def gtts_voice(args): 

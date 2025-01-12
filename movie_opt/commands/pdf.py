@@ -168,7 +168,10 @@ def split_sentences_2voice(args):
         with open(concat_file, 'w', encoding='utf-8') as concat:
             for i in range(len(sentences)):
                 concat.write(f"file 'temp_{i}.mp3'\n")
-
+        missing, duplicates = check_file_numbers(concat_file)
+        if len(missing) > 0 or len(concat_file) > 0:
+            return
+        
         command = [
             "ffmpeg", "-f", "concat", "-safe", "0", "-i", concat_file, "-c", "copy", output_mp3
         ]
@@ -223,6 +226,9 @@ def remove_numbers_from_txt(file_path):
         content = file.read()
         # 使用正则表达式替换所有数字为空字符串
         new_content = re.sub(r'\[\d+\]', '', content)
+        new_content = re.sub(r'\(\d+\)', '', new_content)
+        new_content = re.sub(r'【\d+】', '', new_content)
+        new_content = re.sub(r'（\d+）', '', new_content)
         # 将修改后的内容写回文件开头，覆盖原内容
         file.seek(0)
         file.write(new_content)

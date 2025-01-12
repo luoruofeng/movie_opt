@@ -10,6 +10,58 @@ import cv2
 from pkg_resources import resource_filename
 import logging
 
+def check_file_numbers(file_path):
+    try:
+        with open(file_path, 'r') as file:
+            lines = file.readlines()
+        
+        # 提取编号
+        numbers = []
+        for line in lines:
+            parts = line.strip().split("'")
+            if len(parts) >= 2:
+                file_name = parts[1]
+                try:
+                    number = int(file_name.split('_')[1].split('.')[0])
+                    numbers.append(number)
+                except ValueError:
+                    print(f"警告: 无法解析编号的行: {line.strip()}")
+        
+        # 检查重复和缺失
+        numbers.sort()
+        min_num, max_num = numbers[0], numbers[-1]
+        full_range = set(range(min_num, max_num + 1))
+        missing = sorted(full_range - set(numbers))
+        duplicates = sorted(set(num for num in numbers if numbers.count(num) > 1))
+
+        # 输出结果
+        if not missing and not duplicates:
+            print(f"编号是连续的，没有缺失或重复。 file_path:{file_path}")
+            logging.info(f"编号是连续的，没有缺失或重复。 file_path:{file_path}")
+        else:
+            if missing:
+                print(f"缺失的编号: {missing}")
+                logging.info("缺失的编号: {missing} file_path:{file_path}")
+            if duplicates:
+                print(f"重复的编号: {duplicates}")
+                logging.info("缺失的编号: {duplicates} file_path:{file_path}")
+
+        return missing, duplicates
+
+    except FileNotFoundError:
+        print(f"文件 {file_path} 不存在。")
+        return [], []
+    except Exception as e:
+        print(f"发生错误: {e}")
+        return [], []
+
+# 使用脚本
+missing_list, duplicate_list = check_file_numbers('file_list.txt')
+print("返回值:")
+print("缺失编号:", missing_list)
+print("重复编号:", duplicate_list)
+
+
 def delete_txt_files(folder_path):
     """
     递归删除指定文件夹及其子文件夹中的所有 .txt 文件。
