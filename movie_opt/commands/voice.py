@@ -36,6 +36,7 @@ def edge_tts_voice(args):
     save_path = args.save_path
     language = args.language
     voice = args.voice
+    rate = getattr(args, 'rate', '+0%')  # 添加语速参数，默认为正常语速
 
     # 检查内容是否为空
     if not content:
@@ -66,7 +67,7 @@ def edge_tts_voice(args):
         retries = 10
         for attempt in range(1, retries + 1):
             try:
-                communicate = edge_tts.Communicate(content, voice)
+                communicate = edge_tts.Communicate(content, voice, rate=rate)
                 await communicate.save(save_path)
                 print(f"Audio saved successfully at {save_path}")
                 return
@@ -86,7 +87,6 @@ def edge_tts_voice(args):
         asyncio.ensure_future(run_tts_with_retry())
     else:
         asyncio.run(run_tts_with_retry())
-
 
 
 def gtts_voice(args): 

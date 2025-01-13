@@ -109,9 +109,14 @@ def split_sentences_2voice(args):
     def process_txt(txt_path):
         print(f"生成音频：{txt_path}")
         # 读取txt文件内容
+        text = None
+        convert_to_utf8(txt_path) #转化 utf-8
+        remove_numbers_from_txt(txt_path)  # 删除 [数字] 样式的内容
+        remove_parentheses_content(txt_path)  # 删除所有小括号括起来的内容
+        clean_txt_of_garbled(txt_path)  # 清理乱码
+        replace_punctuation(txt_path)  # 修改标点符号为逗号
         with open(txt_path, 'r', encoding='utf-8') as file:
             text = file.read()
-
         # 匹配中文和英文标点符号作为分句符，省略号，冒号，分号等也包括在内
         sentence_delimiters = r'[。！？\.!?：；…]'
 
@@ -119,34 +124,16 @@ def split_sentences_2voice(args):
         quoted_pattern = r'".*?"'
 
         # 用于存储结果的列表
-        result = []
-
-        # 找到所有双引号括起来的内容
-        quoted_matches = re.finditer(quoted_pattern, text)
-        start_idx = 0
-
-        for match in quoted_matches:
-            # 提取双引号前的内容
-            pre_text = text[start_idx:match.start()]
-            if pre_text:
-                result.extend(re.split(sentence_delimiters, pre_text))
-
-            # 提取双引号内的内容
-            result.append(match.group())
-            start_idx = match.end()
-
-        # 处理最后一段文本
-        remaining_text = text[start_idx:]
-        if remaining_text:
-            result.extend(re.split(sentence_delimiters, remaining_text))
-
-        # 去除空字符串并返回结果
-        sentences = [sentence.strip() for sentence in result if sentence.strip()]
+        r = []
+        r.extend(re.split(sentence_delimiters, text))
+        sentences = []
+        for s in r:
+            sentences.append(s+"。") 
         sentences = merge_short_sentences(sentences)
         # 设置临时目录和参数
         args = argparse.ArgumentParser()
         args.language = "zh-cn"
-        args.voice = None
+        args.voice = "zh-CN-YunyangNeural"
         filename = os.path.splitext(os.path.basename(txt_path))[0]
         temp_dir = f"{os.path.join(os.path.dirname(txt_path),filename)}"
         
@@ -158,10 +145,9 @@ def split_sentences_2voice(args):
         # 保存分句的音频文件
         for i, sentence in enumerate(sentences):
             args.save_path = os.path.join(temp_dir, f"temp_{i}.mp3")
-            args.content = sentence
+            args.content = sentence.replace("\n","").replace(" ","")
             edge_tts_voice(args)
 
-        # TODO: ffmpeg 拼接所有 MP3 文件，保存为最终文件
         output_mp3 = os.path.join(os.path.dirname(txt_path) ,f"{filename}.mp3")
         concat_file = f"{temp_dir}/file_list.txt"
 
@@ -169,9 +155,8 @@ def split_sentences_2voice(args):
             for i in range(len(sentences)):
                 concat.write(f"file 'temp_{i}.mp3'\n")
         missing, duplicates = check_file_numbers(concat_file)
-        if len(missing) > 0 or len(concat_file) > 0:
+        if len(missing) > 0 or len(duplicates) > 0:
             return
-        
         command = [
             "ffmpeg", "-f", "concat", "-safe", "0", "-i", concat_file, "-c", "copy", output_mp3
         ]
@@ -192,10 +177,10 @@ def split_sentences_2voice(args):
 
     # 检查路径是否存在
     if not os.path.exists(txt_path):
-        print(f"路径 {txt_path} 不存在！")
+        print(f"replace_punctuation 路径 {txt_path} 不存在！")
         return
 
-    # 如果是单个文件且为 PDF，则直接操作
+    # 如果是单个文件且为 txt，则直接操作
     if os.path.isfile(txt_path) and get_file_extension(txt_path) == ".txt":
         process_txt(txt_path)
     # 如果是目录，则遍历目录中所有 txt 文件
@@ -291,7 +276,6 @@ def pdf_to_txt_pypdf(args):
             remove_numbers_from_txt(txt_file) #删除 [数字] 样式的内容
             remove_parentheses_content(txt_file) #删除所有小括号括起来的内容
             clean_txt_of_garbled(txt_file) # 清理乱码
-            replace_punctuation(txt_file) #修改标点符号为逗号
         except Exception as e:
             print(f"处理文件 {pdf_file} 时出错: {e}")
 
@@ -302,7 +286,7 @@ def pdf_to_txt_pypdf(args):
 
     # 检查路径是否存在
     if not path_obj.exists():
-        print(f"路径 {path} 不存在！")
+        print(f"pdf_to_txt_pypdf 路径 {path} 不存在！")
         return
 
     # 如果是单个文件且为 PDF，则直接操作
@@ -341,7 +325,6 @@ def pdf_to_txt_pdfplumber(args):
                         # 使用 pdfplumber 提取每页的文本
                         text = page.extract_text()
                         if text:
-                            # text = text.replace('\n', "")  # 去掉换行符
                             # 将文本按行分割成段落
                             paragraphs = text.split('\n')
                             formatted_text = ""
@@ -358,7 +341,6 @@ def pdf_to_txt_pdfplumber(args):
             remove_numbers_from_txt(txt_file)  # 删除 [数字] 样式的内容
             remove_parentheses_content(txt_file)  # 删除所有小括号括起来的内容
             clean_txt_of_garbled(txt_file)  # 清理乱码
-            replace_punctuation(txt_file)  # 修改标点符号为逗号
         except Exception as e:
             print(f"处理文件 {pdf_file} 时出错: {e}")
 
@@ -369,7 +351,7 @@ def pdf_to_txt_pdfplumber(args):
 
     # 检查路径是否存在
     if not path_obj.exists():
-        print(f"路径 {path} 不存在！")
+        print(f"pdf_to_txt_pdfplumber 路径 {path} 不存在！")
         return
 
     # 如果是单个文件且为 PDF，则直接操作
@@ -384,9 +366,9 @@ def pdf_to_txt_pdfplumber(args):
         return
 
 
-import argparse
-args = argparse.Namespace()
-args.path = r"C:\Users\luoruofeng\Desktop\test5"
-if __name__ == "__main__":
-    pdf_to_txt_pdfplumber(args)
-    split_sentences_2voice(args)
+# import argparse
+# args = argparse.Namespace()
+# args.path = r"C:\Users\luoruofeng\Desktop\test5"
+# if __name__ == "__main__":
+#     pdf_to_txt_pdfplumber(args)
+#     split_sentences_2voice(args)

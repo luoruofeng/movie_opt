@@ -9,6 +9,53 @@ from datetime import datetime, timedelta
 import cv2
 from pkg_resources import resource_filename
 import logging
+import chardet
+
+def convert_to_utf8(file_path):
+    """
+    将指定路径的文本文件转换为 UTF-8 编码并替换原文件。
+    :param file_path: 文本文件路径
+    """
+    try:
+        # 读取文件的原始二进制数据
+        with open(file_path, 'rb') as file:
+            raw_data = file.read()
+
+        # 检测文件编码
+        detected = chardet.detect(raw_data)
+        original_encoding = detected['encoding']
+        confidence = detected['confidence']
+
+        # 输出检测信息
+        print(f"检测到文件 '{file_path}' 的编码为: {original_encoding} (置信度: {confidence:.2f})")
+        if original_encoding == 'utf-8':
+            return 
+        # 如果无法检测到编码，提示用户
+        if not original_encoding:
+            print(f"无法检测文件 '{file_path}' 的编码格式，跳过该文件。")
+            return
+
+        # 常见中文编码尝试顺序
+        possible_encodings = ['utf-8', 'gbk', 'gb2312', 'big5', original_encoding]
+
+        # 尝试解码并写回文件
+        for encoding in possible_encodings:
+            try:
+                text_data = raw_data.decode(encoding)
+                with open(file_path, 'w', encoding='utf-8') as file:
+                    file.write(text_data)
+                print(f"文件 '{file_path}' 已成功从 {encoding} 转换为 UTF-8 编码。")
+                return
+            except Exception as decode_error:
+                print(f"尝试使用编码 {encoding} 处理文件时出错: {decode_error}")
+
+        # 如果所有尝试均失败
+        print(f"文件 '{file_path}' 无法被成功转换，跳过该文件。")
+        logging.error(f"将指定路径的文本文件转换为 UTF-8 编码并替换原文件。文件 '{file_path}' 无法被成功转换，跳过该文件。")
+    except Exception as e:
+        print(f"处理文件 '{file_path}' 时出错: {e}")
+
+
 
 def check_file_numbers(file_path):
     try:
@@ -54,12 +101,6 @@ def check_file_numbers(file_path):
     except Exception as e:
         print(f"发生错误: {e}")
         return [], []
-
-# 使用脚本
-missing_list, duplicate_list = check_file_numbers('file_list.txt')
-print("返回值:")
-print("缺失编号:", missing_list)
-print("重复编号:", duplicate_list)
 
 
 def delete_txt_files(folder_path):
