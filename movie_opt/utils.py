@@ -10,6 +10,104 @@ import cv2
 from pkg_resources import resource_filename
 import logging
 import chardet
+import time
+from functools import wraps
+
+
+def convert_seconds(seconds):
+    hours = int(seconds // 3600)  # 计算小时数
+    minutes = int((seconds % 3600) // 60)  # 计算分钟数
+    seconds = int(seconds % 60)  # 计算剩余秒数
+
+    result = []
+
+    # 如果小时数大于0，添加小时
+    if hours > 0:
+        result.append(f"{hours}小时")
+
+    # 如果分钟数大于0，添加分钟
+    if minutes > 0 or hours > 0:
+        result.append(f"{minutes}分钟")
+
+    # # 如果秒数大于0，添加秒
+    # if seconds > 0:
+    #     result.append(f"{seconds}秒")
+
+    return "".join(result)
+
+
+def rename_files_to_parent_folder(folder_path):
+    """
+    将指定文件夹下的所有文件名改为与其父文件夹同名。
+    
+    :param folder_path: 文件夹的路径
+    """
+    if not os.path.isabs(folder_path):
+        raise ValueError("Please provide an absolute folder path.")
+    
+    if not os.path.isdir(folder_path):
+        raise FileNotFoundError(f"The folder '{folder_path}' does not exist.")
+    
+    # 获取父文件夹名称
+    parent_folder_name = os.path.basename(folder_path)
+    
+    # 遍历文件夹中的所有文件
+    for index, file_name in enumerate(os.listdir(folder_path)):
+        file_path = os.path.join(folder_path, file_name)
+        
+        # 跳过子文件夹，仅处理文件
+        if os.path.isfile(file_path):
+            # 保留原扩展名
+            file_extension = os.path.splitext(file_name)[1]
+            # 构造新的文件名
+            new_file_name = f"{parent_folder_name}{file_extension}"
+            new_file_path = os.path.join(folder_path, new_file_name)
+            
+            # 重命名文件
+            os.rename(file_path, new_file_path)
+            print(f"Renamed '{file_name}' to '{new_file_name}'.")
+
+
+def rename_file_to_parent_folder(file_path):
+    """
+    将给定绝对路径的文件重命名为其父文件夹同名。
+    
+    :param file_path: 文件的绝对路径
+    """
+    if not os.path.isabs(file_path):
+        raise ValueError("Please provide an absolute file path.")
+    
+    if not os.path.isfile(file_path):
+        raise FileNotFoundError(f"The file '{file_path}' does not exist.")
+    
+    # 获取父文件夹名和文件所在的目录路径
+    parent_folder = os.path.basename(os.path.dirname(file_path))
+    file_dir = os.path.dirname(file_path)
+    
+    # 构造新的文件路径
+    new_file_path = os.path.join(file_dir, parent_folder + os.path.splitext(file_path)[1])
+    
+    # 重命名文件
+    os.rename(file_path, new_file_path)
+    print(f"Renamed '{file_path}' to '{new_file_path}'.")
+
+def timing_decorator(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        start_time = time.time()  # 记录开始时间
+        result = func(*args, **kwargs)  # 执行被装饰的函数
+        end_time = time.time()  # 记录结束时间
+        elapsed_time = end_time - start_time  # 计算总用时
+        
+        # 根据总用时选择显示分钟或小时
+        if elapsed_time < 3600:  # 小于1小时，显示分钟
+            print(f"Function '{func.__name__}' executed in {elapsed_time / 60:.2f} minutes")
+        else:  # 超过或等于1小时，显示小时
+            print(f"Function '{func.__name__}' executed in {elapsed_time / 3600:.2f} hours")
+        
+        return result  # 返回原函数的结果
+    return wrapper
+
 
 def convert_to_utf8(file_path):
     """
@@ -142,7 +240,7 @@ def add_text_to_video(input_file, text):
     file_ext = os.path.splitext(input_file)[1].lower()
 
     # 临时文件路径
-    temp_file = f"add_font_temp_{file_ext}"
+    temp_file = f"add_font_temp{file_ext}"
 
     # 如果临时文件已经存在，删除它
     if os.path.exists(temp_file):
@@ -150,7 +248,7 @@ def add_text_to_video(input_file, text):
 
     try:
         # 字体文件路径
-        font_path = os.path.join(os.path.dirname(resource_filename(__name__,".")),'static', "SourceHanSerif-Bold.otf")  # 确保使用正确的路径
+        font_path = os.path.join(resource_filename(__name__,"commands"),'static', "SourceHanSerif-Bold.otf")  # 确保使用正确的路径
         # drawtext需要修改路径样式为 "C\:/Users/luoruofeng/Desktop/test3/SourceHanSerif-Bold.otf"
         font_path = font_path.replace("\\","/").replace(":","\\:")
         # 构造ffmpeg命令
@@ -159,16 +257,16 @@ def add_text_to_video(input_file, text):
             "-i", input_file,  # 输入文件
             "-vf", (
                 f"drawtext=text='{text}':"  # 动态设置文本
-                f"fontfile={font_path}:"  # 设置字体文件路径
+                f"fontfile='{font_path}':"  # 设置字体文件路径
                 "fontcolor=white@0.5:"  # 设置字体颜色为白色，透明度50%
-                "fontsize=188:"  # 设置字体大小
+                "fontsize=222:"  # 设置字体大小
                 "x=(w-text_w)/2:"  # 水平居中
                 "y=(h-text_h)/2"  # 垂直居中
             ),
             "-codec:a", "copy",  # 保留原始音频
             temp_file  # 临时输出文件
         ]
-        
+        print(" ".join(command))
         # 使用 subprocess 执行命令
         subprocess.run(command, check=True)
 

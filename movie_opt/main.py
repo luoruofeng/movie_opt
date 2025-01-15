@@ -13,8 +13,8 @@ setup_logging()
 
 import argparse
 from movie_opt.commands.create import create_pc, create_phone
-from movie_opt.commands.subtitle import  convert_time, srtsegment, srt2ass, addass, mergesrt, sequencesrt, srt2txtpng
-from movie_opt.commands.picture import split_video, video_segment, cut_pc2phone, scale_pc2phone, add_text
+from movie_opt.commands.subtitle import  count_srt_statistics, convert_time, srtsegment, srt2ass, addass, mergesrt, sequencesrt, srt2txtpng
+from movie_opt.commands.picture import generate_images,split_video, video_segment, cut_pc2phone, scale_pc2phone, add_text
 from movie_opt.commands.ai import get_hard_words_and_set_color
 from movie_opt.commands.translate import find_db_word
 from movie_opt.commands.voice import  edge_tts_voice, gtts_voice, youdao_voice, create_mp3_by_clone_voice, clone_voice_conversion
@@ -83,8 +83,12 @@ def main():
     subparser_subtitle_convert_time = subparser_subtitle.add_parser("convert_time", help="将所有srt文件的第一行字幕的开始时间改为00:00:00.000")
     subparser_subtitle_convert_time.add_argument("--path", required=True, help="包含srt文件夹的路径")
     subparser_subtitle_convert_time.set_defaults(func=convert_time)
-    
 
+    #Command subtitle -> Subcommand count_srt_statistics
+    subparser_subtitle_count_srt_statistics = subparser_subtitle.add_parser("count_srt_statistics", help="统计srt文件中的对话行数和英语词汇量")
+    subparser_subtitle_count_srt_statistics.add_argument("--path", required=True, help="srt文件夹的路径")
+    subparser_subtitle_count_srt_statistics.set_defaults(func=count_srt_statistics)
+    
 
     #Command picture
     parser_picture = subparsers.add_parser("picture", help="修改视频")
@@ -116,6 +120,12 @@ def main():
     subparser_picture_split_video.add_argument("--srt_path", required=True, help="字幕文件夹的路径")
     subparser_picture_split_video.add_argument("--video_path", required=True, help="视频文件夹的路径")
     subparser_picture_split_video.set_defaults(func=split_video)
+
+    
+    #Command picture -> Subcommand generate_images
+    subparser_picture_generate_images = subparser_picture.add_parser("generate_images", help="生成几百张封面图片")
+    subparser_picture_generate_images.add_argument("--path", required=True, help="视频的路径")
+    subparser_picture_generate_images.set_defaults(func=generate_images)
 
     #Command ai
     parser_ai = subparsers.add_parser("ai", help="ai提问")

@@ -7,6 +7,46 @@ from movie_opt.utils import *
 import shutil
 from datetime import timedelta
 
+def count_srt_statistics(args):
+    """
+    统计 SRT 文件的字幕行数和唯一英文单词的数量。
+
+    :param srt_file_path: 字幕文件的路径
+    :return: 一个元组 (字幕行数, 唯一英文单词数量)
+    """
+    subtitle_line_count = 0
+    unique_words = set()
+    srt_file_path = args.path
+    if not os.path.exists(srt_file_path):
+        logging.info(f"统计英文单词的数量失败,没有srt文件:{srt}")
+        return 0,0
+    try:
+        with open(srt_file_path, 'r', encoding='utf-8') as file:
+            lines = file.readlines()
+
+        for line in lines:
+            # 去掉时间戳、序号等非字幕内容
+            if re.match(r'^\d+$', line.strip()) or re.match(r'-->+', line.strip()):
+                continue
+
+            # 非空行即为字幕内容
+            stripped_line = line.strip()
+            if stripped_line:
+                subtitle_line_count += 1
+
+                # 提取字幕中的英文单词（不区分大小写）
+                words = re.findall(r'[a-zA-Z]+', stripped_line)
+                unique_words.update(word.lower() for word in words)
+
+        return subtitle_line_count, len(unique_words)
+
+    except FileNotFoundError:
+        print(f"File not found: {srt_file_path}")
+        return 0, 0
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return 0, 0
+
 
 # 全局变量，定义 ASS 文件的样式
 ASS_STYLE = """
@@ -134,6 +174,11 @@ def addass(args):
                    for file in os.listdir(path)
                    if file.endswith((".mp4", ".mkv", ".avi", ".mov"))]
 
+    if len(ass_files) == 0:
+        print("没有找到字幕文件")
+    if len(video_files) == 0:
+        print("没有找到视频文件")
+
     ass_path = ass_files[0]
     video_path = video_files[0]
     video_name = os.path.basename(video_path)
@@ -147,11 +192,22 @@ def addass(args):
     relative_video_path = os.path.relpath(video_path, start=path)
     relative_output_path = os.path.relpath(output_path, start=path)
     
-    # 使用 ffmpeg 添加字幕
     command = [
-        'ffmpeg', '-i', relative_video_path, '-vf', f"ass={relative_ass_path}",
-        '-c:a', 'copy', relative_output_path
+        'ffmpeg',
+        '-i', relative_video_path,         # 输入视频文件
+        '-vf', f"ass={relative_ass_path}",  # 应用字幕滤镜
+        '-c:v', 'libx264',                 # 对视频流重新编码
+        '-preset', 'ultrafast',             # 快速编码
+        '-map', '0:v:0',                   # 只保留第一个视频流 (Stream #0:0)
+        '-map', '0:a:0',                   # 只保留第一个音频流 (Stream #0:1，英语)
+        '-c:a', 'aac',                     # 使用AAC编码器重新编码音频
+        '-b:a', '192k',                    # 设置音频比特率 (例如 192k)
+        '-ac', '2',                        # 设置输出音频为立体声（可选，根据需要调整）
+        '-map_metadata', '-1',             # 清除全局元信息
+        '-movflags', 'use_metadata_tags',  # 确保写入新的元信息
+        relative_output_path             # 输出文件路径
     ]
+
     try:
         subprocess.run(command, check=True, cwd=path)  # 指定 cwd 为 path，确保相对路径正确
         print(f"已为视频 {video_name} 添加字幕，保存为 {output_path}")

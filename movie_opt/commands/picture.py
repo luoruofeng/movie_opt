@@ -1,11 +1,159 @@
+import argparse
 import os
+import random
 from pkg_resources import resource_filename
 import subprocess
 import sys
 import cv2
 import re
 from movie_opt.utils import *
+from movie_opt.commands.subtitle import count_srt_statistics
 import logging
+import os
+from PIL import Image, ImageDraw, ImageFont
+
+
+def add_titles_to_images(video_path, folder_path):
+    font_path = os.path.join(os.path.dirname(__file__), 'static', "SourceHanSerif-Bold.otf")
+    video_name = os.path.splitext(os.path.basename(video_path))[0]
+
+    main_title_font_size = 180
+    subtitle_font_size = 110
+    main_title_color = (255, 20, 147)  # 亮桃红色
+    subtitle_color = (255, 255, 255)  # 亮紫色
+    background_color = (0, 0, 0, 128)  # 黑色半透明
+    padding = 20  # 背景与文字的间距
+
+    main_title_font = ImageFont.truetype(font_path, main_title_font_size)
+    subtitle_font = ImageFont.truetype(font_path, subtitle_font_size)
+
+    main_title_text = "今日口语食粮"
+    subtitle_text = f"《{video_name}》好看"
+
+    for filename in os.listdir(folder_path):
+        file_path = os.path.join(folder_path, filename)
+
+        if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.tiff')):
+            try:
+                image = Image.open(file_path).convert("RGBA")
+                img_width, img_height = image.size
+
+                overlay = Image.new("RGBA", image.size, (0, 0, 0, 0))
+                draw = ImageDraw.Draw(overlay)
+
+                # 计算主标题边界框
+                main_title_bbox = draw.textbbox((0, 0), main_title_text, font=main_title_font)
+                main_title_width = main_title_bbox[2] - main_title_bbox[0]
+                main_title_height = main_title_bbox[3] - main_title_bbox[1]
+
+                # 计算副标题边界框
+                subtitle_bbox = draw.textbbox((0, 0), subtitle_text, font=subtitle_font)
+                subtitle_width = subtitle_bbox[2] - subtitle_bbox[0]
+                subtitle_height = subtitle_bbox[3] - subtitle_bbox[1]
+
+                # 背景总宽高
+                bg_width = max(main_title_width, subtitle_width) + padding * 2
+                bg_height = main_title_height + subtitle_height + padding * 3
+
+                # 背景位置
+                bg_x0 = (img_width - bg_width) // 2
+                bg_y0 = (img_height - bg_height) // 2
+                bg_x1 = bg_x0 + bg_width
+                bg_y1 = bg_y0 + bg_height
+
+                # 绘制背景矩形
+                draw.rectangle([bg_x0, bg_y0, bg_x1, bg_y1], fill=background_color)
+
+                # 主标题位置
+                main_title_x = (img_width - main_title_width) // 2
+                main_title_y = bg_y0 + padding
+
+                # 副标题位置
+                subtitle_x = (img_width - subtitle_width) // 2
+                subtitle_y = main_title_y + main_title_height + padding
+
+                # 绘制主标题和副标题
+                draw.text((main_title_x, main_title_y), main_title_text, font=main_title_font, fill=main_title_color)
+                draw.text((subtitle_x, subtitle_y), subtitle_text, font=subtitle_font, fill=subtitle_color)
+
+                # 合并图片和叠加层
+                combined = Image.alpha_composite(image, overlay)
+                combined = combined.convert("RGB")
+                combined.save(file_path)
+
+                print(f"已处理图片: {file_path}")
+
+            except Exception as e:
+                print(f"处理图片 {file_path} 时出错: {e}")
+
+
+
+def add_info_text_to_images(video_path, folder_path, srt_path):
+    # 字体路径
+    font_path = os.path.join(os.path.dirname(resource_filename(__name__,".")),'static', "SourceHanSerif-Bold.otf")
+    font_size = 99
+    font_color = (57, 255, 20)  # 荧光亮绿色
+    stroke_color = (0, 0, 0)    # 黑色描边
+
+    # 加载字体
+    font = ImageFont.truetype(str(font_path), font_size)
+
+    video_duration = convert_seconds(get_mp4_duration_cv2(video_path))
+    arg_parser = argparse.ArgumentParser()
+    arg_parser.path = srt_path
+    linecount,wordcount= count_srt_statistics(arg_parser)
+
+    # 要添加的文字内容
+    text_lines = [
+        "时长-"+video_duration,
+        f"单词量-{wordcount}个",
+        f"对话-{linecount}行"
+    ]
+
+    # 遍历文件夹中的所有文件
+    for filename in os.listdir(folder_path):
+        file_path = os.path.join(folder_path, filename)
+
+        # 检查是否为图片文件（扩展名检查）
+        if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.tiff')):
+            try:
+                # 打开图片
+                image = Image.open(file_path)
+                draw = ImageDraw.Draw(image)
+
+                # 获取图片宽度和高度
+                img_width, img_height = image.size
+
+                # 起始位置（左下角）
+                margin = 20
+                x = margin
+                y = img_height - margin
+
+                # 绘制每行文字
+                for line in reversed(text_lines):  # 从下往上绘制
+                    # 计算文本尺寸
+                    text_bbox = draw.textbbox((x, y), line, font=font)
+                    text_height = text_bbox[3] - text_bbox[1]
+
+                    # 上移一行的高度
+                    y -= text_height
+
+                    # 绘制文本
+                    draw.text(
+                        (x, y), 
+                        line, 
+                        font=font, 
+                        fill=font_color, 
+                        stroke_width=2, 
+                        stroke_fill=stroke_color
+                    )
+
+                # 保存处理后的图片（覆盖原图片）
+                image.save(file_path)
+                print(f"已处理图片: {file_path}")
+
+            except Exception as e:
+                print(f"处理图片 {file_path} 时出错: {e}")
 
 def get_video_w_h(video_path):
     """使用 OpenCV 获取视频的分辨率"""
@@ -166,15 +314,17 @@ def video_segment(args):
 
             # 使用 ffmpeg 截取视频片段（这种方案结尾的位置准确 但是开始位置会提前）
             try:
-                # 例如： ffmpeg -accurate_seek -i "C:\Users\luoruofeng\Desktop\test\test_subtitled.mkv" -ss 1162.620 -to 1486.070 "C:\Users\luoruofeng\Desktop\test\Lion King 2 1998-en@cn-9.mkv"
                 command = [
                     "ffmpeg",
                     "-accurate_seek",
                     "-i", video,
                     "-ss", f"{start_seconds:.3f}",
                     "-to", f"{end_seconds:.3f}",
-                    # "-c", "copy",  # 保留所有轨道，包括字幕
-                    # "-map", "0",   # 确保保留所有轨道
+                    "-map", "0",  # 保留所有轨道
+                    "-map_metadata", "-1",  # 清除全局元信息
+                    "-c:v", "libx264",  # 强制重新编码视频
+                    "-c:a", "aac",  # 强制重新编码音频
+                    "-movflags", "use_metadata_tags",  # 生成符合新元信息标准的文件
                     output_filename
                 ]
                 
@@ -243,27 +393,35 @@ def split_video(args):
         video_name = os.path.splitext(os.path.basename(video))[0]
         screenshots_dir = os.path.join(os.path.dirname(video), "每行截图-"+video_name)
         os.makedirs(screenshots_dir, exist_ok=True)
+        logging.info(f"创建文件夹:{screenshots_dir}")
 
         video_clips_dir = os.path.join(os.path.dirname(video), "每行发音视频-"+video_name)
         os.makedirs(video_clips_dir, exist_ok=True)
+        logging.info(f"创建文件夹:{video_clips_dir}")
 
         video_clips_dir2 = os.path.join(os.path.dirname(video), "每行发音视频2-"+video_name)
         os.makedirs(video_clips_dir2, exist_ok=True)
+        logging.info(f"创建文件夹:{video_clips_dir2}")
 
         video_child_dir = os.path.join(os.path.dirname(video), "每行儿童发音视频-"+video_name)
         os.makedirs(video_child_dir, exist_ok=True)
+        logging.info(f"创建文件夹:{video_child_dir}")
 
         video_empty_dir = os.path.join(os.path.dirname(video), "每行跟读视频-"+video_name)
         os.makedirs(video_empty_dir, exist_ok=True)
+        logging.info(f"创建文件夹:{video_empty_dir}")
 
         video_cn_dir = os.path.join(os.path.dirname(video), "每行中文视频-"+video_name)
         os.makedirs(video_cn_dir, exist_ok=True)
+        logging.info(f"创建文件夹:{video_cn_dir}")
 
         video_split_dir = os.path.join(os.path.dirname(video), "每行分段视频-"+video_name)
         os.makedirs(video_split_dir, exist_ok=True)
+        logging.info(f"创建文件夹:{video_split_dir}")
 
         video_split_complete_dir = os.path.join(os.path.dirname(video), "每行完整视频-"+video_name)
         os.makedirs(video_split_complete_dir, exist_ok=True)
+        logging.info(f"创建文件夹:{video_split_complete_dir}")
 
         video_name, _ = os.path.splitext(os.path.basename(video))
 
@@ -289,12 +447,15 @@ def split_video(args):
                 "-i", video,
                 "-ss", f"{start_seconds:.3f}",
                 "-to", f"{end_seconds:.3f}",
-                # "-c", "copy",  # 保留所有轨道，包括字幕
-                # "-map", "0",   # 确保保留所有轨道
+                "-map", "0",  # 保留所有轨道
+                "-map_metadata", "-1",  # 清除全局元信息
+                "-c:v", "libx264",  # 强制重新编码视频
+                "-c:a", "aac",  # 强制重新编码音频
+                "-movflags", "use_metadata_tags",  # 生成符合新元信息标准的文件
                 output_path
             ]
 
-            print(f"按行分段保存 {output_path}")
+            logging.info(f"按行分段保存 {output_path} video:{video} command:{' '.join(command)}")
             subprocess.run(command, check=True)
 
             id += 1
@@ -333,12 +494,15 @@ def split_video(args):
                 "-i", video,
                 "-ss", f"{start_seconds:.3f}",
                 "-to", f"{end_seconds:.3f}",
-                # "-c", "copy",  # 保留所有轨道，包括字幕
-                # "-map", "0",   # 确保保留所有轨道
+                "-map", "0",  # 保留所有轨道
+                "-map_metadata", "-1",  # 清除全局元信息
+                "-c:v", "libx264",  # 强制重新编码视频
+                "-c:a", "aac",  # 强制重新编码音频
+                "-movflags", "use_metadata_tags",  # 生成符合新元信息标准的文件
                 output_path
             ]
 
-            print(f"按行分段完整保存 {output_path}")
+            logging.info(f"按行完整保存 {output_path} video:{video} command:{' '.join(command)}")
             subprocess.run(command, check=True)
             
             st = subtract_one_millisecond(end_time)
@@ -484,6 +648,7 @@ def split_video(args):
                 if cn_voice_duration <= 0:
                     continue
             else:
+                logging.error(f"创建音频失败 {cn_voice}")
                 continue
 
             #拼接音频“1s空白”和“儿童内容”
@@ -499,6 +664,7 @@ def split_video(args):
                 if child_voice_duration <= 0:
                     continue
             else:
+                logging.error(f"创建音频失败 {child_voice}")
                 continue
 
             #拼接音频“慢速”和“内容”
@@ -514,6 +680,7 @@ def split_video(args):
                 if voice_duration <= 0:
                     continue
             else:
+                logging.error(f"创建音频失败 {content_voice}")
                 continue
 
             #拼接音频“1s空白”和“内容”（美音）
@@ -528,6 +695,7 @@ def split_video(args):
                 if voice_duration2 <= 0:
                     continue
             else:
+                logging.error(f"创建音频失败 {content_voice2}")
                 continue
 
 
@@ -537,7 +705,7 @@ def split_video(args):
             command = [
                 "ffmpeg", "-y", "-i", video, "-ss", str(end_seconds-0.4), "-vframes", "1","-q:v", "2", screenshot_path
             ]
-            print(f"执行命令 创建每行所需要的截图: {' '.join(command)}")
+            logging.info(f"创建每行截图 video:{video} screenshot_path:{screenshot_path} command:{' '.join(command)}")
             subprocess.run(command)
 
             print(f"生成截图: {screenshot_path}")
@@ -559,7 +727,7 @@ def split_video(args):
                 child_path                             # 输出文件路径
             ]
 
-            print(f"执行命令 创建每行儿童发音视频: {' '.join(command)}")
+            logging.info(f"创建儿童发音视频 child_path:{child_path} command:{' '.join(command)}")
             subprocess.run(command)
 
             print(f"生成视频片段: {child_path}")
@@ -583,7 +751,7 @@ def split_video(args):
                 cn_path                             # 输出文件路径
             ]
 
-            print(f"执行命令 创建每行中文视频: {' '.join(command)}")
+            logging.info(f"创建每行中文视频: cn_path:{cn_path} command:{' '.join(command)}")
             subprocess.run(command)
             print(f"生成视频片段: {cn_path}")
             #添加 “中文” 到视频
@@ -608,7 +776,7 @@ def split_video(args):
                 clip_path                             # 输出文件路径
             ]
 
-            print(f"执行命令 创建每行发音视频: {' '.join(command)}")
+            logging.info(f"创建每行发音视频: clip_path:{clip_path} command:{' '.join(command)}")
             subprocess.run(command)
             print(f"生成视频片段: {clip_path}")
             #添加 “美音慢速” 到视频
@@ -632,7 +800,7 @@ def split_video(args):
                 clip_path2                             # 输出文件路径
             ]
 
-            print(f"执行命令 创建每行发音视频2: {' '.join(command)}")
+            print(f"执行命令 创建每行发音视频2: clip_path2:{clip_path2} command:{' '.join(command)}")
             subprocess.run(command)
 
             print(f"生成视频片段: {clip_path2}")
@@ -651,7 +819,7 @@ def split_video(args):
             #计算跟读后的静音时长
             # 获取音频时长
             audio_duration = float(subprocess.check_output(
-                ["ffprobe", "-i", follow, "-show_entries", "format=duration", "-v", "quiet", "-of", "csv=p=0"]
+                ["ffprobe", "-i", ding, "-show_entries", "format=duration", "-v", "quiet", "-of", "csv=p=0"]
             ).strip())
 
             silence_duration = max(0, voice_duration - audio_duration)
@@ -669,7 +837,7 @@ def split_video(args):
                 safe_remove(combined_audio, "删除音频")
                 subprocess.run([
                     "ffmpeg", "-y",
-                    "-i", follow, "-i", silent_audio, 
+                    "-i", ding, "-i", silent_audio, 
                     "-filter_complex", "[0:0][1:0]concat=n=2:v=0:a=1[out]", "-map", "[out]", combined_audio
                 ])
                 follow = combined_audio  # 更新音频路径
@@ -687,7 +855,7 @@ def split_video(args):
                 empty_path                             # 输出文件路径
             ]
 
-            print(f"执行命令 跟读: {' '.join(command)}")
+            print(f"创建跟读视频: empty_path:{empty_path} command:{' '.join(command)}")
             subprocess.run(command)
             print(f"生成视频 {empty_path}")
             #添加 “跟读” 到视频
@@ -712,3 +880,92 @@ def safe_remove(file_path, description):
         print(f"{description}: {file_path}")
     else:
         print(f"{description} 文件不存在，跳过删除: {file_path}")
+
+
+
+def generate_images(args):
+    video_file = args.path
+
+
+    # 确保视频文件存在
+    if not os.path.exists(video_file):
+        raise FileNotFoundError(f"Video file not found. %s",video_file)
+
+    # 获取视频时长
+    video_duration = get_mp4_duration_ffmpeg(video_file)
+    if video_duration is None:
+        raise RuntimeError("无法获取视频时长，无法继续执行。")
+    print(f"Video duration: {video_duration} seconds")
+
+    # 定义保存文件夹路径
+    base_dir = os.path.dirname(video_file)
+    images_dir = os.path.join(base_dir, "images")
+    pictures_dir = os.path.join(base_dir, "picture")
+
+    # 创建文件夹
+    os.makedirs(images_dir, exist_ok=True)
+    os.makedirs(pictures_dir, exist_ok=True)
+
+    # 随机截图 333 张
+    print("Starting to generate 100 random screenshots...")
+    for i in range(333):
+        output_image = os.path.join(images_dir, f"frame_{i + 1}.png")
+        print(f"创建333张封面 output_image:{output_image}")
+        timestamp = random.uniform(0, video_duration)  # 随机时间戳
+        if os.path.exists(output_image):
+            os.remove(output_image)
+        # 如果 -ss 位于 -i 参数之前，ffmpeg 会直接跳转到目标时间戳进行截图，速度会显著提高。
+        ffmpeg_cmd = [
+            "ffmpeg",
+            "-ss", f"{timestamp}",
+            "-i", video_file,
+            "-frames:v", "1",
+            output_image
+        ]
+        logging.info(f"创建333张封面 {' '.join(ffmpeg_cmd)}")
+        subprocess.run(ffmpeg_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding="utf-8")
+        print(f"Generated screenshot: {output_image}")
+
+    # 获取生成的图片路径
+    saved_images = [os.path.join(images_dir, img) for img in os.listdir(images_dir) if img.endswith(".png")]
+    print(f"Total screenshots saved: {len(saved_images)}")
+
+    # 生成 444 张合成图片
+    print("Starting to generate 444 combined images...")
+    for i in range(444):
+        # 随机选取 3 张图片
+        selected_images = random.sample(saved_images, 3)
+        image_objects = [Image.open(img) for img in selected_images]
+
+        # 获取最大宽度和总高度
+        widths, heights = zip(*(img.size for img in image_objects))
+        max_width = max(widths)
+        total_height = sum(heights)
+
+        # 创建合成图片
+        combined_image = Image.new("RGB", (max_width, total_height))
+
+        # 逐张拼接
+        y_offset = 0
+        for img in image_objects:
+            combined_image.paste(img, (0, y_offset))
+            y_offset += img.height
+
+        # 拉伸或压缩到 1080x1920
+        combined_image_resized = combined_image.resize((1080, 1920), Image.Resampling.LANCZOS)
+
+        # 保存为 JPG 格式
+        output_image_path = os.path.join(pictures_dir, f"picture_{i + 1}.jpg")
+        combined_image_resized.save(output_image_path, format="JPEG")
+        print(f"Generated combined image: {output_image_path}")
+
+    # 获取影片信息
+    srts = find_srt_files(os.path.dirname(video_file))
+    if srts is None or len(srts) < 1:
+        logging.error(f"没有找到video同级的srt文件 video_file：{video_file}")
+        return
+    srt_path = srts[0]
+    add_info_text_to_images(video_file,pictures_dir,srt_path)# 给图添加信息
+    add_titles_to_images(video_file,pictures_dir)#给图片添加标题
+
+    print(f"All images generated and saved to {pictures_dir}")

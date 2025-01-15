@@ -17,10 +17,22 @@ https://www.alibabafonts.com/#/font
 movie_opt.exe picture cut_pc2phone --path="C:\Users\luoruofeng\Desktop\test"
 ```
 
+## 创建封面
+```
+movie_opt.exe picture generate_images --path="C:\Users\luoruofeng\Desktop\test\video.mp4"
+```
+
+
 ## 将srt字幕转化ass字幕文件
 ```
 movie_opt.exe subtitle srt2ass --path="C:\Users\luoruofeng\Desktop\test"
 ```
+
+## 统计srt文件中的对话行数和英语词汇量
+```
+movie_opt.exe subtitle count_srt_statistics --path="C:\Users\luoruofeng\Desktop\test\test.srt"
+```
+
 
 ## 给视频添加ass字幕
 ```
