@@ -27,8 +27,8 @@ def add_titles_to_images(video_path, folder_path):
     main_title_font = ImageFont.truetype(font_path, main_title_font_size)
     subtitle_font = ImageFont.truetype(font_path, subtitle_font_size)
 
-    main_title_text = "今日口语食粮"
-    subtitle_text = f"《{video_name}》好看"
+    main_title_text = "今日英语口粮"
+    subtitle_text = f"来吃《{video_name}》"
 
     for filename in os.listdir(folder_path):
         file_path = os.path.join(folder_path, filename)
@@ -105,9 +105,9 @@ def add_info_text_to_images(video_path, folder_path, srt_path):
 
     # 要添加的文字内容
     text_lines = [
-        "时长-"+video_duration,
-        f"单词量-{wordcount}个",
-        f"对话-{linecount}行"
+        "时长  "+video_duration,
+        f"单词量 {wordcount}个",
+        f"对话  {linecount}行"
     ]
 
     # 遍历文件夹中的所有文件

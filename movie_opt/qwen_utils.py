@@ -48,15 +48,15 @@ class QwenPlusAssistant:
         except Exception as e:
             return f"发生错误：{e}"
 
-# 示例使用：
-if __name__ == '__main__':
-    # 创建QwenPlusAssistant对象
-    qwen_assistant = QwenPlusAssistant()
+# # 示例使用：
+# if __name__ == '__main__':
+#     # 创建QwenPlusAssistant对象
+#     qwen_assistant = QwenPlusAssistant()
     
-    # 第一次对话，不使用历史对话
-    reply = qwen_assistant.converse('你是谁？')
-    print("模型回复:", reply)
+#     # 第一次对话，不使用历史对话
+#     reply = qwen_assistant.converse('你是谁？')
+#     print("模型回复:", reply)
     
-    # 第二次对话，使用历史对话
-    reply_with_history = qwen_assistant.converse('你能做什么？', use_history=True)
-    print("模型回复(带历史):", reply_with_history)
+#     # 第二次对话，使用历史对话
+#     reply_with_history = qwen_assistant.converse('你能做什么？', use_history=True)
+#     print("模型回复(带历史):", reply_with_history)
