@@ -13,7 +13,7 @@ setup_logging()
 
 import argparse
 from movie_opt.commands.create import create_pc, create_phone
-from movie_opt.commands.subtitle import  count_srt_statistics, convert_time, srtsegment, srt2ass, addass, mergesrt, sequencesrt, srt2txtpng
+from movie_opt.commands.subtitle import change_ass_hard_word_style, count_srt_statistics, convert_time, srtsegment, srt2ass, addass, mergesrt, sequencesrt, srt2txtpng
 from movie_opt.commands.picture import generate_images,split_video, video_segment, cut_pc2phone, scale_pc2phone, add_text
 from movie_opt.commands.ai import get_hard_words_and_set_color
 from movie_opt.commands.translate import find_db_word
@@ -51,6 +51,14 @@ def main():
     subparser_subtitle_srt2ass = subparser_subtitle.add_parser("srt2ass", help="srt -> ass 视频")
     subparser_subtitle_srt2ass.add_argument("--path", required=False, help="srt的文件夹路径")
     subparser_subtitle_srt2ass.set_defaults(func=srt2ass)
+
+
+    
+    # Command subtitle -> Subcommand change_ass_hard_word_style
+    subparser_subtitle_change_ass_hard_word_style = subparser_subtitle.add_parser("change_ass_hard_word_style", help="ass文件的复杂单词修改颜色样式")
+    subparser_subtitle_change_ass_hard_word_style.add_argument("--path", required=False, help="ass的文件夹路径")
+    subparser_subtitle_change_ass_hard_word_style.set_defaults(func=change_ass_hard_word_style)
+
 
     # Command subtitle -> Subcommand mergesrt
     subparser_subtitle_mergesrt = subparser_subtitle.add_parser("mergesrt", help="将两个不同语言的srt合并为一个srt")

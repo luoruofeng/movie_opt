@@ -1,4 +1,6 @@
 import json
+import re
+import shutil
 from PIL import Image
 import os
 from tinytag import TinyTag
@@ -12,6 +14,90 @@ import logging
 import chardet
 import time
 from functools import wraps
+
+import re
+
+def detect_language(text):
+    """
+    判断字符串是英文、中文，还是混合内容
+    :param text: 输入字符串
+    :return: "English", "Chinese", "Mixed"
+    """
+    english_pattern = re.compile(r'^[A-Za-z\s]+$')  # 仅包含英文字符和空格
+    chinese_pattern = re.compile(r'^[\u4e00-\u9fff\s]+$')  # 仅包含中文字符和空格
+
+    if english_pattern.match(text):
+        return "English"
+    elif chinese_pattern.match(text):
+        return "Chinese"
+    else:
+        return "Mixed"
+
+
+
+def remove_brackets_content(s):
+    return re.sub(r'\[[^\]]*\]|\([^)]*\)', '', s)
+
+def format_srt(input_file: str):
+    print("Formatting SRT file...")
+
+    # 读取文件内容
+    with open(input_file, "r", encoding="utf-8") as file:
+        content = file.read()
+
+    # 统一换行符格式，去除多余空行
+    content = content.replace('\r\n', '\n').replace('\r', '\n')
+    content = re.sub(r'\n{2,}', '\n', content)
+
+    # 匹配 SRT 字幕块
+    pattern = re.compile(r'(\d+)\n(\d{2}:\d{2}:\d{2},\d{3} --> \d{2}:\d{2}:\d{2},\d{3})\n([\s\S]+?)(?=\n\d+|\Z)', re.MULTILINE)
+    
+    subtitles = []
+    content = remove_brackets_content(content)
+    for match in pattern.finditer(content):
+        number, timestamp, text_lines = match.groups()
+        print(number, timestamp, text_lines)
+        text_lines = text_lines.strip()
+
+        # 去除多余空行
+        line_content = text_lines.split("\n")
+        if len(line_content) <= 1:
+            print(f"删除字幕没有换行也就是只有中文或是只有中文的字幕 {number} {timestamp} {text_lines}")
+            continue
+        
+        if line_content[0].isdigit():
+            if int(number) == int(line_content[0]) - 1:
+                print(f"删除没有内容只有时间的空行 {number} {timestamp} {text_lines}")
+                continue
+
+        # 只保留不为空的字幕块
+        if text_lines:
+            subtitles.append((number, timestamp, text_lines))
+
+    # 格式化，保持原编号
+    formatted_text = "\n\n".join(
+        f"{number}\n{timestamp}\n{text}" for number, timestamp, text in subtitles
+    )
+
+    # 写回文件
+    with open(input_file, "w", encoding="utf-8") as file:
+        file.write(formatted_text)
+        print(f"格式化完成 {input_file}")
+
+
+def change_file_extension(file_path: str, new_extension: str) -> str:
+    """
+    将指定文件的扩展名修改为指定的新扩展名。
+
+    :param file_path: 文件路径（可以是绝对路径或只有文件名）
+    :param new_extension: 新的文件扩展名（不需要加"."）
+    :return: 修改后新路径
+    """
+    directory, filename = os.path.split(file_path)  # 分离目录和文件名
+    base_name, _ = os.path.splitext(filename)       # 获取无后缀的文件名
+    new_filename = f"{base_name}.{new_extension}"   # 拼接新文件名
+    new_path = os.path.join(directory, new_filename) if directory else new_filename  # 组合新路径
+    return new_path
 
 
 def convert_seconds(seconds):
@@ -36,9 +122,10 @@ def convert_seconds(seconds):
     return "".join(result)
 
 
+
 def rename_files_to_parent_folder(folder_path):
     """
-    将指定文件夹下的所有文件名改为与其父文件夹同名。
+    仅修改文件名与父文件夹不同的文件，否则跳过。
     
     :param folder_path: 文件夹的路径
     """
@@ -52,20 +139,21 @@ def rename_files_to_parent_folder(folder_path):
     parent_folder_name = os.path.basename(folder_path)
     
     # 遍历文件夹中的所有文件
-    for index, file_name in enumerate(os.listdir(folder_path)):
+    for file_name in os.listdir(folder_path):
         file_path = os.path.join(folder_path, file_name)
         
-        # 跳过子文件夹，仅处理文件
+        # 仅处理文件，跳过子文件夹
         if os.path.isfile(file_path):
-            # 保留原扩展名
-            file_extension = os.path.splitext(file_name)[1]
-            # 构造新的文件名
-            new_file_name = f"{parent_folder_name}{file_extension}"
-            new_file_path = os.path.join(folder_path, new_file_name)
+            file_extension = os.path.splitext(file_name)[1]  # 保留原扩展名
+            expected_file_name = f"{parent_folder_name}{file_extension}"
             
-            # 重命名文件
-            os.rename(file_path, new_file_path)
-            print(f"Renamed '{file_name}' to '{new_file_name}'.")
+            # 仅当文件名与父文件夹名不同才重命名
+            if file_name != expected_file_name:
+                new_file_path = os.path.join(folder_path, expected_file_name)
+                os.rename(file_path, new_file_path)
+                print(f"Renamed '{file_name}' to '{expected_file_name}'.")
+            else:
+                print(f"Skipped '{file_name}' (name matches parent folder).")
 
 
 def rename_file_to_parent_folder(file_path):
@@ -124,32 +212,33 @@ def convert_to_utf8(file_path):
         original_encoding = detected['encoding']
         confidence = detected['confidence']
 
-        # 输出检测信息
         print(f"检测到文件 '{file_path}' 的编码为: {original_encoding} (置信度: {confidence:.2f})")
+        
         if original_encoding == 'utf-8':
             return 
-        # 如果无法检测到编码，提示用户
+        
         if not original_encoding:
             print(f"无法检测文件 '{file_path}' 的编码格式，跳过该文件。")
             return
 
-        # 常见中文编码尝试顺序
         possible_encodings = ['utf-8', 'gbk', 'gb2312', 'big5', original_encoding]
 
-        # 尝试解码并写回文件
         for encoding in possible_encodings:
             try:
                 text_data = raw_data.decode(encoding)
-                with open(file_path, 'w', encoding='utf-8') as file:
+
+                # **修正换行符**
+                text_data = text_data.replace('\r\n', '\n').replace('\r', '\n')
+
+                with open(file_path, 'w', encoding='utf-8', newline='\n') as file:
                     file.write(text_data)
+                
                 print(f"文件 '{file_path}' 已成功从 {encoding} 转换为 UTF-8 编码。")
                 return
             except Exception as decode_error:
                 print(f"尝试使用编码 {encoding} 处理文件时出错: {decode_error}")
 
-        # 如果所有尝试均失败
         print(f"文件 '{file_path}' 无法被成功转换，跳过该文件。")
-        logging.error(f"将指定路径的文本文件转换为 UTF-8 编码并替换原文件。文件 '{file_path}' 无法被成功转换，跳过该文件。")
     except Exception as e:
         print(f"处理文件 '{file_path}' 时出错: {e}")
 
@@ -290,13 +379,14 @@ def get_file_extension(file_path):
     _, extension = os.path.splitext(file_path)
     return extension.lower()
 
-def change_file_extension(file_path, new_extension):
-    """
-    修改给定文件的后缀为指定后缀。
 
-    :param file_path: 需要修改的文件的绝对路径。
+def create_file_with_new_extension(file_path, new_extension):
+    """
+    在同一目录下创建一个新文件，该文件名称与原文件相同但扩展名不同，不覆盖原文件。
+
+    :param file_path: 需要处理的文件的绝对路径。
     :param new_extension: 新的后缀（包含 . ，如 '.txt'）。
-    :return: 修改后新文件路径。
+    :return: 新创建的文件路径。
     """
     if not os.path.isabs(file_path):
         raise ValueError("请提供文件的绝对路径")
@@ -304,14 +394,17 @@ def change_file_extension(file_path, new_extension):
     if not new_extension.startswith("."):
         raise ValueError("新后缀必须以 '.' 开头")
     
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"文件 '{file_path}' 不存在")
+    
     # 分离文件名和原始后缀
     file_base, _ = os.path.splitext(file_path)
     
-    # 拼接新的文件路径
+    # 生成新文件路径
     new_file_path = f"{file_base}{new_extension}"
     
-    # 重命名文件
-    os.rename(file_path, new_file_path)
+    # 复制原文件内容到新文件
+    shutil.copy2(file_path, new_file_path)  # 保留原文件元数据（如修改时间）
     
     return new_file_path
 

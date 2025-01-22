@@ -1,11 +1,14 @@
 import os
 import subprocess
+import traceback
 import chardet  # 用于自动检测文件编码
 import re
 from PIL import Image, ImageDraw, ImageFont
 from movie_opt.utils import *
 import shutil
 from datetime import timedelta
+from movie_opt.commands.ai import get_phrase,get_hard_words
+
 
 def count_srt_statistics(args):
     """
@@ -61,10 +64,86 @@ PlayDepth: 0
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: Chinese,Alibaba Sans Bold,27,&H00FFFFFF,&H00000000,&H00000000,&H00FFFFFF,1,0,0,0,100,100,0,0,3,4,0,2,10,10,10,1
 Style: English,AlibabaSans-HeavyItalic,31,&H00FFFFFF,&H00000000,&H00000000,&H00FFFFFF,1,0,0,0,100,100,-2,0,1,4,0,2,10,10,10,1
+Style: Chinese_yellow,Alibaba Sans Bold,27,&H00FFFF00,&H00000000,&H00000000,&H00FFFF00,1,0,0,0,100,100,0,0,3,4,0,2,10,10,10,1
+Style: English_yellow,AlibabaSans-HeavyItalic,37,&H00FFFF00,&H00000000,&H00000000,&H00FFFF00,1,0,0,0,100,100,-2,0,1,4,0,2,10,10,10,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
+
+
+from movie_opt.commands.ai import init_ai
+def change_ass_hard_word_style(args):
+    file_path = args.path
+    if not os.path.exists(file_path):
+        logging.info(f"change_ass_hard_word_style 文件不存在:{file_path}")
+        return
+    with open(file_path, 'r', encoding='utf-8') as f:
+        lines = f.readlines()
+    
+    new_lines = []
+    dialogue_lines = []
+
+    init_ai()
+    
+    for line in lines:
+        if line.startswith("Dialogue:"):
+            dialogue_lines.append(line)
+        else:
+            new_lines.append(line)
+    
+    modified_dialogues = []
+    
+    for i in range(0, len(dialogue_lines) - 1, 2):
+        ch_line = dialogue_lines[i]
+        en_line = dialogue_lines[i + 1]
+        
+        # 检查是否是中英文配对
+        if 'Chinese' in ch_line and 'English' in en_line:
+            ch_text = ch_line.split(',', 9)[-1].strip()
+            en_text = en_line.split(',', 9)[-1].strip()
+            
+            print(f"Chinese: {ch_text}")
+            print(f"English: {en_text}")
+
+            try:
+                hard_words = get_hard_words(ch_text, en_text)
+                if hard_words is not None and len(hard_words) > 0:
+                    for hard_word in hard_words:
+                        most_hard_word,translation,phonetic,match_cn_txt = hard_word
+                        # 替换match_cn_txt为黄色字体
+                        if match_cn_txt is not None and match_cn_txt in ch_text:
+                            replacement = r'{\\c&H00FFFF00&}'+match_cn_txt+r'{\\r}'
+                            ch_line = re.sub(match_cn_txt, replacement, ch_line, flags=re.IGNORECASE)
+
+
+                        # 替换most_hard_word为黄色字体并且改字体大小
+                        if re.search(rf'\b{most_hard_word}\b', en_text, re.IGNORECASE):
+                            replacement = r'{\\c&H00FFFF00&\\fs37}'+most_hard_word+r'{\\r}'
+                            en_line = re.sub(most_hard_word, replacement, en_line, flags=re.IGNORECASE)
+
+                    print(f"Chinese: {ch_line} English: {en_line}")
+            except Exception as e:
+                print(f"An error occurred: {e}")
+                logging.error(f"查询最难单词出错 ch:{ch_text} en:{en_text} e:{e}")
+                traceback.print_exc()
+                print(f"查询最难单词出错 ch:{ch_text} en:{en_text} e:{e}")
+
+                
+            modified_dialogues.append(ch_line)
+            modified_dialogues.append(en_line)
+        else:
+            modified_dialogues.append(ch_line)
+            modified_dialogues.append(en_line)
+    
+    # 重新组合文件内容
+    new_lines.extend(modified_dialogues)
+    
+    with open(file_path, 'w', encoding='utf-8') as f:
+        f.writelines(new_lines)
+    
+    print("字幕文件处理完成并已保存！")
+
 
 def detect_encoding(file_path):
     """检测文件的编码"""
@@ -148,6 +227,7 @@ def srt2ass(args):
         if file_name.endswith(".srt"):
             srt_file = os.path.join(path, file_name)
             ass_file = os.path.splitext(srt_file)[0] + ".ass"
+            format_srt(srt_file)
 
             print(f"转换文件: {srt_file} -> {ass_file}")
             subtitle_srt_to_ass(srt_file, ass_file)
@@ -426,6 +506,10 @@ def srt2txtpng(args):
             create_png_with_text(txt, output_png_path)
             print(f"处理完成：{output_png_path}")
 
+from PIL import Image
+
+# 提高 Pillow 允许的最大像素数
+Image.MAX_IMAGE_PIXELS = None
 def create_png_with_text(text, output_path):
     # 图片的宽度（固定）
     image_width = 1284
@@ -539,49 +623,70 @@ def write_srt_file(output_folder, original_name, index, segments):
     file_name = f"{original_name}-{index}.srt"
     output_path = os.path.join(output_folder, file_name)
     with open(output_path, "w", encoding="utf-8") as f:
-        f.write("\n\n".join(segments))
+        f.write("\n".join(segments))
     print(f"写入文件: {output_path}")
+    format_srt(output_path) # 格式化
+
+
+
 
 def process_srt_segment_file(srt_path, output_folder, segment_second):
     """ 处理单个 SRT 文件，将其分段 """
     print(f"正在处理文件: {srt_path}")
     original_name = os.path.splitext(os.path.basename(srt_path))[0]
     with open(srt_path, "r", encoding="utf-8") as file:
-        lines = file.read().split("\n\n")
+        lines = file.read().split("\n")
 
     current_segment = []
     previous_end_time = 0  # 上一句结束时间
     segment_index = 1  # 文件序号
 
+    time_pattern = r"\d{2}:\d{2}:\d{2},\d{3} --> \d{2}:\d{2}:\d{2},\d{3}"
     for line in lines:
         if not line.strip():  # 跳过空行
             continue
 
-        parts = line.split("\n", 2)  # 分成序号、时间戳、字幕文本
-        if len(parts) < 2:
-            continue
+        if bool(re.search(time_pattern, line)):  # 匹配时间戳
+            # parts = line.split("\n", 2)  # 分成序号、时间戳、字幕文本
+            # if len(parts) < 2:
+            #     continue
 
-        # 解析时间戳
-        time_range = parts[1]
-        start_time, end_time = time_range.split(" --> ")
-        start_time_sec = parse_srt_time(start_time)[0]
-        end_time_sec = parse_srt_time(end_time)[0]
 
-        # 判断是否需要分段
-        if previous_end_time and (start_time_sec - previous_end_time > int(segment_second)):
-            # 保存当前分段
-            write_srt_file(output_folder, original_name, segment_index, current_segment)
-            segment_index += 1
-            current_segment = []  # 清空当前分段内容
+            # 解析时间戳
+            time_range = line.strip()
+            start_time, end_time = time_range.split("-->")
+            
+            start_time_sec = parse_srt_time(start_time.strip())[0]
+            end_time_sec = parse_srt_time(end_time.strip())[0]
 
-        # 添加当前行到分段中
-        current_segment.append(line)
-        previous_end_time = end_time_sec  # 更新上一句的结束时间
+            # 判断是否需要分段
+            if previous_end_time and (start_time_sec - previous_end_time > int(segment_second)):
+                last_line = None
+                if current_segment is not None:
+                    last_line = current_segment[-1]
+                    del(current_segment[-1])
+
+                # 保存当前分段
+                write_srt_file(output_folder, original_name, segment_index, current_segment)
+
+                segment_index += 1
+                current_segment = []  # 清空当前分段内容
+                current_segment.append(last_line)
+
+            # 添加当前行到分段中
+            current_segment.append(line)
+            previous_end_time_temp = end_time
+            previous_end_time = end_time_sec  # 更新上一句的结束时间
+        else:
+            current_segment.append(line)
 
     # 保存最后一个分段
     if current_segment:
+        print( current_segment)
         write_srt_file(output_folder, original_name, segment_index, current_segment)
 
+
+        
 def srtsegment(args): 
     print(f"SRT 文件或文件夹路径: {args.path}")
 
@@ -601,7 +706,9 @@ def srtsegment(args):
     def create_srt_seg_dir(path):
         output_folder = os.path.join(path, "srt分段")
         if os.path.exists(output_folder):
+            print(f"已存在 srt分段 文件夹: {output_folder}")
             shutil.rmtree(output_folder)  # 删除旧的分段文件夹
+        print(f"创建 srt分段 文件夹: {output_folder}")
         os.makedirs(output_folder)
         return output_folder
 

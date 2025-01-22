@@ -28,6 +28,14 @@ movie_opt.exe picture generate_images --path="C:\Users\luoruofeng\Desktop\test\v
 movie_opt.exe subtitle srt2ass --path="C:\Users\luoruofeng\Desktop\test"
 ```
 
+
+## ass文件的复杂单词修改颜色样式 
+```
+movie_opt.exe subtitle change_ass_hard_word_style --path="C:\Users\luoruofeng\Desktop\test\test.ass"
+```
+
+
+
 ## 统计srt文件中的对话行数和英语词汇量
 ```
 movie_opt.exe subtitle count_srt_statistics --path="C:\Users\luoruofeng\Desktop\test\test.srt"

@@ -204,6 +204,11 @@ def merge_same_type(args,dir_suffix="-中英对照"):
         os.makedirs(video_output_dir, exist_ok=True)
     merge_list_path = os.path.join(video_output_dir , f"merge_list.txt")
     videos = sort_paths_by_last_number(find_videos_in_special_folders(dir_path,dir_suffix))
+    if videos == None or len(videos) <= 0:
+        print(f"没有找到视频: {dir_path}")
+        logging.info(f"没有找到视频: {dir_path}")
+        return
+    # 创建合并列表文件
     file_extension = get_file_extension(videos[0])
     with open(merge_list_path, "w", encoding="utf-8") as merge_list:
         for v in videos:
@@ -466,6 +471,11 @@ def merge_mp4(args, folder_types, video_type):
         with open(merge_list_path, "w", encoding="utf-8") as merge_list:
             for video in sorted_videos:
                 merge_list.write(f"file '{video}'\n")
+
+        if len(sorted_videos) <= 0:
+            print(f"没有找到文件夹序号为{folder_index}的文件夹")
+            logging.info(f"没有找到文件夹序号为{folder_index}的文件夹")
+            continue
 
         video_extension = get_file_extension(sorted_videos[0])
 

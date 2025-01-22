@@ -1,9 +1,12 @@
+import multiprocessing
 import os
 import sys
 import subprocess
+import traceback
 from movie_opt.utils import *
 import re
 from movie_opt.commands.merge import delete_folders_except_merge
+
 
 @timing_decorator
 def custom1(args):
@@ -26,7 +29,8 @@ def custom1(args):
             # 只处理子文件夹
             if os.path.isdir(subdir_path):
                 # 指定文件夹路径下的所有文件重命名为与该文件夹同名
-                rename_files_to_parent_folder(subdir_path)
+                # TODO 放开
+                # rename_files_to_parent_folder(subdir_path)
                 #找到视频文件
                 videos = find_video_files(subdir_path)
                 if videos is None or len(videos) <= 0:
@@ -37,9 +41,10 @@ def custom1(args):
                 if srts is None or len(srts) <= 0:
                     raise RuntimeError(f"{subdir_path}文件夹下没有srt文件")
                 srt = srts[0]
+                convert_to_utf8(srt)
+                ass = change_file_extension(srt,"ass")
                 print(f"正在处理子文件夹: {subdir_path}")
                 c = sys.argv[0]
-
                 
                 print("创建封面")
                 command = [
@@ -62,6 +67,17 @@ def custom1(args):
                 print(f"执行命令: {' '.join(command)}")
                 subprocess.run(command,check=True)
                 
+                
+                print("修改ass复杂单词的颜色")
+                command = [
+                    c,
+                    "subtitle", 
+                    "change_ass_hard_word_style", 
+                    "--path="+ass
+                ]
+                print(f"执行命令: {' '.join(command)}")
+                subprocess.run(command,check=True)
+
                 print("给视频添加ass字幕")
                 command = [
                     c,
@@ -72,18 +88,8 @@ def custom1(args):
                 print(f"执行命令: {' '.join(command)}")
                 subprocess.run(command,check=True)
 
-                print("srt字幕内容转png图片")
-                command = [
-                    c,
-                    "subtitle", 
-                    "srt2txtpng", 
-                    "--path="+subdir_path
-                ]
-                print(f"执行命令: {' '.join(command)}")
-                subprocess.run(command,check=True)
-
                 
-                print("将srt文件安装时间间隔分段保存为新的srt文件")
+                print("将srt文件按照时间间隔分段保存为新的srt文件")
                 command = [
                     c,
                     "subtitle", 
@@ -93,6 +99,19 @@ def custom1(args):
                 ]
                 print(f"执行命令: {' '.join(command)}")
                 subprocess.run(command,check=True)
+
+
+                # print("srt字幕内容转png图片")
+                # command = [
+                #     c,
+                #     "subtitle", 
+                #     "srt2txtpng", 
+                #     "--path="+subdir_path
+                # ]
+                # print(f"执行命令: {' '.join(command)}")
+                subprocess.run(command,check=True)
+
+                
 
                 #-----------------------------------------
                 # movie_opt.exe picture video_segment   --srt_path="C:\Users\luoruofeng\Desktop\test\srt分段" --video_path="C:\Users\luoruofeng\Desktop\test\test_subtitled.mkv"
@@ -110,7 +129,7 @@ def custom1(args):
                 subprocess.run(command,check=True)
                 
                 # 将srt文件的第一行字幕改为00:00:00.000开始
-                print("将srt文件安装时间间隔分段保存为新的srt文件")
+                print("将srt文件segment时间间隔分段保存为新的srt文件")
                 command = [
                     c,
                     "subtitle", 
@@ -196,6 +215,7 @@ def custom1(args):
                 print(f"{subdir_path} 不是一个有效的文件夹。需要传入的文件夹内包含子文件夹。")
         except Exception as e:
             print(f"处理 {subdir_path} 时出错，错误: {str(e)}")
+            traceback.print_exc()
             continue  # 如果出错，跳过当前子文件夹，继续下一个
 
     print("所有子文件夹处理完成。")

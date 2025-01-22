@@ -1,6 +1,7 @@
 import argparse
 import os
 import random
+import traceback
 from pkg_resources import resource_filename
 import subprocess
 import sys
@@ -11,7 +12,7 @@ from movie_opt.commands.subtitle import count_srt_statistics
 import logging
 import os
 from PIL import Image, ImageDraw, ImageFont
-
+from movie_opt.commands.ai import get_english_difficulty_local_llm, init_ai
 
 def add_titles_to_images(video_path, folder_path):
     font_path = os.path.join(os.path.dirname(__file__), 'static', "SourceHanSerif-Bold.otf")
@@ -344,6 +345,499 @@ def convert_to_seconds(timestamp):
     return total_seconds
 
 
+def split_complete_video(split_endtime_json_list,video_name,video_extension,video_split_complete_dir,video):
+    # 按照行分段原视频-完整视频(上一行字幕的结束到这一行字幕的开始)
+        st = "00:00:00,000"
+        # 将字典的键值对转换为列表
+        id_counter = 0
+        for info in split_endtime_json_list:
+            id_counter += 1
+            start_time = info["st"]
+            end_time = info["et"]
+            cn_content = info["cn"]
+            en_content = info["en"]
+
+            if id_counter == len(split_endtime_json_list):
+                # 这是最后一行
+                end_time = None
+            else:
+                end_time = info["et"]
+            
+
+            split_name = f"{video_name}-{id_counter}{video_extension}"
+            output_path = os.path.join(video_split_complete_dir, split_name)
+
+            start_seconds = convert_to_seconds(st)
+            video_totle_second = get_mp4_duration_ffmpeg(video)
+
+            if end_time is None:
+                end_seconds = get_mp4_duration_ffmpeg(video)
+            else:
+                end_seconds = convert_to_seconds(end_time)
+                if end_seconds > video_totle_second:
+                    end_seconds = video_totle_second
+
+            command = [
+                "ffmpeg",
+                "-accurate_seek",
+                "-i", video,
+                "-ss", f"{start_seconds:.3f}",
+                "-to", f"{end_seconds:.3f}",
+                "-map", "0",  # 保留所有轨道
+                "-map_metadata", "-1",  # 清除全局元信息
+                "-c:v", "libx264",  # 强制重新编码视频
+                "-c:a", "aac",  # 强制重新编码音频
+                "-movflags", "use_metadata_tags",  # 生成符合新元信息标准的文件
+                output_path
+            ]
+
+            logging.info(f"按行完整保存 {output_path} video:{video} command:{' '.join(command)} en_content:{en_content} cn_content:{cn_content}")
+            subprocess.run(command, check=True)
+            
+            st = subtract_one_millisecond(end_time)
+
+def split_different_video(split_endtime_json_list,video_name,video_extension,video,screenshots_dir,video_child_dir,video_cn_dir,video_clips_dir,video_clips_dir2,video_empty_dir,filter_count,filter_score):
+    # 创建各种视频
+    id_counter = 0
+    for info in split_endtime_json_list:
+        id_counter += 1
+        start_time = info["st"]
+        end_time = info["et"]
+        cn_content = info["cn"]
+        en_content = info["en"]
+        
+        # 若改行字幕少于filter_count个字符不生成跟读视频
+        if len(en_content) < filter_count:
+            logging.info(f"英文字幕少于{filter_count}个字符不生成跟读视频 {en_content} id:{id_counter}")
+            continue
+        
+        # 最难的单词分数低于filter_score分不生成跟读视频
+        try:
+            score = get_english_difficulty_local_llm(cn_content,en_content)
+            if score < filter_score:
+                logging.info(f"最难的单词分数低于{filter_score}分不生成跟读视频 {en_content} id:{id_counter}")
+                continue
+        except Exception as e:
+            logging.error(f"本地模型单词评分发送异常",exc_info=True)
+            traceback.print_exc()
+            continue
+        screenshot_name = f"{video_name}-{id_counter}.jpg"
+        screenshot_path = os.path.join(screenshots_dir, screenshot_name)
+        
+        #edge-tts生成中文mp3
+        cn_voice = os.path.join(os.path.dirname(video),"cn_temp.mp3")
+        voice_command = [
+            sys.argv[0],  # This is the key change: use sys.argv[0]
+            "voice",
+            "edge_tts_voice",
+            "--content=" + info["cn"],
+            "--save_path=" + cn_voice,
+            "--language=zh-cn"
+        ]
+
+        print("Executing command:", " ".join(voice_command))
+        result = subprocess.run(voice_command, capture_output=True, text=True, check=True)
+        print("Stdout:", result.stdout)
+        print("Stderr:", result.stderr)
+        print(f"File saved to: {cn_voice}")
+
+
+        #edge-tts生成儿童发音mp3
+        child_voice = os.path.join(os.path.dirname(video),"child_temp.mp3")
+        voice_command = [
+            sys.argv[0],  # This is the key change: use sys.argv[0]
+            "voice",
+            "edge_tts_voice",
+            "--content=" + en_content,
+            "--save_path=" + child_voice,
+            "--language=en-child"
+        ]
+
+        print("Executing command:", " ".join(voice_command))
+        result = subprocess.run(voice_command, capture_output=True, text=True, check=True)
+        print("Stdout:", result.stdout)
+        print("Stderr:", result.stderr)
+        print(f"File saved to: {child_voice}")
+
+
+        
+
+        #edge-tts生成英国英语女发音mp3
+        content_voice = os.path.join(os.path.dirname(video),"temp.mp3")
+        voice_command = [
+            sys.argv[0],  # This is the key change: use sys.argv[0]
+            "voice",
+            "edge_tts_voice",
+            "--content=" + en_content,
+            "--save_path=" + content_voice,
+            "--voice=en-GB-SoniaNeural"
+        ]
+
+        print("Executing command:", " ".join(voice_command))
+        result = subprocess.run(voice_command, capture_output=True, text=True, check=True)
+        print("Stdout:", result.stdout)
+        print("Stderr:", result.stderr)
+        print(f"File saved to: {content_voice}")
+
+
+
+        # #youdao翻译生成mp3
+        # content_voice = os.path.join(os.path.dirname(video),"temp.mp3")
+        # voice_command = [
+        #     sys.argv[0],  # This is the key change: use sys.argv[0]
+        #     "voice",
+        #     "youdao_voice",
+        #     "--content=" + content,
+        #     "--save_path=" + content_voice,
+        #     "--type=1"
+        # ]
+
+        # print("Executing command:", " ".join(voice_command))
+        # result = subprocess.run(voice_command, capture_output=True, text=True, check=True)
+        # print("Stdout:", result.stdout)
+        # print("Stderr:", result.stderr)
+        # print(f"File saved to: {content_voice}")
+
+        #edge-tts生成美国英语男发音mp3
+        content_voice2 = os.path.join(os.path.dirname(video),"temp2.mp3")
+        voice_command = [
+            sys.argv[0],  # This is the key change: use sys.argv[0]
+            "voice",
+            "edge_tts_voice",
+            "--content=" + en_content,
+            "--save_path=" + content_voice2,
+            "--voice=en-US-AndrewMultilingualNeural"
+        ]
+
+        print("Executing command:", " ".join(voice_command))
+        result = subprocess.run(voice_command, capture_output=True, text=True, check=True)
+        print("Stdout:", result.stdout)
+        print("Stderr:", result.stderr)
+        print(f"File saved to: {content_voice2}")
+
+        # #youdao翻译生成mp3（美音）
+        # content_voice2 = os.path.join(os.path.dirname(video),"temp2.mp3")
+        # voice_command2 = [
+        #     sys.argv[0],  # This is the key change: use sys.argv[0]
+        #     "voice",
+        #     "youdao_voice",
+        #     "--content=" + content,
+        #     "--save_path=" + content_voice2,
+        #     "--type=2"
+        # ]
+
+        # print("Executing command:", " ".join(voice_command2))
+
+        # # Use subprocess.run for cleaner handling of output and errors (Python 3.5+).
+        # result2 = subprocess.run(voice_command2, capture_output=True, text=True, check=True)
+
+        # # Print the output (stdout and stderr) for debugging or logging.
+        # print("Stdout:", result2.stdout)
+        # print("Stderr:", result2.stderr)
+        # print(f"File saved to: {content_voice2}")
+
+        #拼接音频“1s空白”和“中文内容”
+        cn_voice_duration = 0
+        if os.path.exists(cn_voice):
+            e = os.path.join(os.path.dirname(resource_filename(__name__,".")),'static', "empty1s.mp3")
+            merge_mp3_files(e , cn_voice)
+            cn_voice_duration = get_mp3_duration_tinytag(cn_voice)
+            print(f"voice_duration: {cn_voice_duration}")
+            if cn_voice_duration is None:
+                continue
+
+            if cn_voice_duration <= 0:
+                continue
+        else:
+            logging.error(f"创建音频失败 {cn_voice}")
+            continue
+
+        #拼接音频“1s空白”和“儿童内容”
+        child_voice_duration = 0
+        if os.path.exists(child_voice):
+            e = os.path.join(os.path.dirname(resource_filename(__name__,".")),'static', "empty1s.mp3")
+            merge_mp3_files(e , child_voice)
+            child_voice_duration = get_mp3_duration_tinytag(child_voice)
+            print(f"voice_duration: {child_voice_duration}")
+            if child_voice_duration is None:
+                continue
+
+            if child_voice_duration <= 0:
+                continue
+        else:
+            logging.error(f"创建音频失败 {child_voice}")
+            continue
+
+        #拼接音频“慢速”和“内容”
+        voice_duration = 0
+        if os.path.exists(content_voice):
+            ding = os.path.join(os.path.dirname(resource_filename(__name__,".")),'static', "ding.mp3")
+            merge_mp3_files(ding , content_voice)
+            voice_duration = get_mp3_duration_tinytag(content_voice)
+            print(f"voice_duration: {voice_duration}")
+            if voice_duration is None:
+                continue
+
+            if voice_duration <= 0:
+                continue
+        else:
+            logging.error(f"创建音频失败 {content_voice}")
+            continue
+
+        #拼接音频“1s空白”和“内容”（美音）
+        voice_duration2 = 0
+        if os.path.exists(content_voice2):
+            empty = os.path.join(os.path.dirname(resource_filename(__name__,".")),'static', "empty1s.mp3")
+            merge_mp3_files(empty , content_voice2)
+            voice_duration2 = get_mp3_duration_tinytag(content_voice2)
+            print(f"voice_duration: {voice_duration2}")
+            if voice_duration2 is None:
+                continue
+            if voice_duration2 <= 0:
+                continue
+        else:
+            logging.error(f"创建音频失败 {content_voice2}")
+            continue
+
+
+        #创建每行所需要的截图
+        end_seconds = convert_to_seconds(info["et"])
+        # ffmpeg -y -i "C:\Users\luoruofeng\Desktop\test\视频片段\Lion King 2 1998-en@cn-3.mkv" -ss 5 -vframes 1 -vf scale=320:-1 -q:v 2 "C:\Users\luoruofeng\Desktop\test\视频片段\每行截图\Lion King 2 1998-en@cn-3-1.jpg"
+        command = [
+            "ffmpeg", "-y", "-i", video, "-ss", str(end_seconds-0.4), "-vframes", "1","-q:v", "2", screenshot_path
+        ]
+        logging.info(f"创建每行截图 video:{video} screenshot_path:{screenshot_path} command:{' '.join(command)}")
+        subprocess.run(command)
+
+        print(f"生成截图: {screenshot_path}")
+
+
+        #创建每行儿童发音视频
+        child_name = f"{video_name}-{id_counter}{video_extension}"
+        child_path = os.path.join(video_child_dir, child_name)
+
+        command = [
+            "ffmpeg", "-y", 
+            "-loop", "1", "-i", screenshot_path,  # 输入图片
+            "-i", child_voice,                  # 输入音频
+            "-c:v", "libx264",                    # 视频编码器
+            "-t",  str(child_voice_duration),        # 视频持续时间
+            "-pix_fmt", "yuv420p",                # 像素格式，确保兼容性
+            "-c:a", "aac",                        # 音频编码器
+            "-shortest",                          # 保证输出长度与最短流（音频或视频）匹配
+            child_path                             # 输出文件路径
+        ]
+
+        logging.info(f"创建儿童发音视频 child_path:{child_path} command:{' '.join(command)}")
+        subprocess.run(command)
+
+        print(f"生成视频片段: {child_path}")
+        #添加 “宝宝慢速” 到视频
+        add_text_to_video(child_path,"宝宝慢速")
+        logging.info(f"创建行视频-宝宝慢速 {child_path} {' '.join(command)}")
+
+        #创建每行中文视频
+        cn_name = f"{video_name}-{id_counter}{video_extension}"
+        cn_path = os.path.join(video_cn_dir, cn_name)
+
+        command = [
+            "ffmpeg", "-y", 
+            "-loop", "1", "-i", screenshot_path,  # 输入图片
+            "-i", cn_voice,                  # 输入音频
+            "-c:v", "libx264",                    # 视频编码器
+            "-t",  str(cn_voice_duration),        # 视频持续时间
+            "-pix_fmt", "yuv420p",                # 像素格式，确保兼容性
+            "-c:a", "aac",                        # 音频编码器
+            "-shortest",                          # 保证输出长度与最短流（音频或视频）匹配
+            cn_path                             # 输出文件路径
+        ]
+
+        logging.info(f"创建每行中文视频: cn_path:{cn_path} command:{' '.join(command)}")
+        subprocess.run(command)
+        print(f"生成视频片段: {cn_path}")
+        #添加 “中文” 到视频
+        add_text_to_video(cn_path,"中文")
+        logging.info(f"创建行视频-中文 {cn_path} {' '.join(command)}")
+
+
+
+        #创建每行发音视频
+        clip_name = f"{video_name}-{id_counter}{video_extension}"
+        clip_path = os.path.join(video_clips_dir, clip_name)
+
+        command = [
+            "ffmpeg", "-y", 
+            "-loop", "1", "-i", screenshot_path,  # 输入图片
+            "-i", content_voice,                  # 输入音频
+            "-c:v", "libx264",                    # 视频编码器
+            "-t",  str(voice_duration),        # 视频持续时间
+            "-pix_fmt", "yuv420p",                # 像素格式，确保兼容性
+            "-c:a", "aac",                        # 音频编码器
+            "-shortest",                          # 保证输出长度与最短流（音频或视频）匹配
+            clip_path                             # 输出文件路径
+        ]
+
+        logging.info(f"创建每行发音视频: clip_path:{clip_path} command:{' '.join(command)}")
+        subprocess.run(command)
+        print(f"生成视频片段: {clip_path}")
+        #添加 “美音慢速” 到视频
+        add_text_to_video(clip_path,"英音慢速")
+        logging.info(f"创建行视频-英音慢速 {clip_path} {' '.join(command)}")
+
+
+        #创建每行发音视频2
+        clip_name = f"{video_name}-{id_counter}{video_extension}"
+        clip_path2 = os.path.join(video_clips_dir2, clip_name)
+
+        command = [
+            "ffmpeg", "-y", 
+            "-loop", "1", "-i", screenshot_path,  # 输入图片
+            "-i", content_voice2,                  # 输入音频
+            "-c:v", "libx264",                    # 视频编码器
+            "-t",  str(voice_duration),        # 视频持续时间
+            "-pix_fmt", "yuv420p",                # 像素格式，确保兼容性
+            "-c:a", "aac",                        # 音频编码器
+            "-shortest",                          # 保证输出长度与最短流（音频或视频）匹配
+            clip_path2                             # 输出文件路径
+        ]
+
+        print(f"执行命令 创建每行发音视频2: clip_path2:{clip_path2} command:{' '.join(command)}")
+        subprocess.run(command)
+
+        print(f"生成视频片段: {clip_path2}")
+        #添加 “美音慢速” 到视频
+        add_text_to_video(clip_path2,"美音慢速")
+        logging.info(f"创建行视频-美音慢速 {clip_path2} {' '.join(command)}")
+        
+        
+
+        #创建每行跟读视频
+        empty_name = f"{video_name}-{id_counter}{video_extension}"
+        empty_path = os.path.join(video_empty_dir, empty_name)
+        
+        follow = os.path.join(os.path.dirname(resource_filename(__name__,".")),'static', "follow.mp3")
+        
+        #计算跟读后的静音时长
+        # 获取音频时长
+        audio_duration = float(subprocess.check_output(
+            ["ffprobe", "-i", ding, "-show_entries", "format=duration", "-v", "quiet", "-of", "csv=p=0"]
+        ).strip())
+
+        silence_duration = max(0, voice_duration - audio_duration)
+
+        #填充静音并生成完整音频
+        silent_audio = "silent.wav"
+        combined_audio = "combined.wav"
+        if silence_duration > 0:
+            safe_remove(silent_audio, "删除音频")
+            subprocess.run([
+                "ffmpeg", "-y",
+                "-f", "lavfi", "-i", f"anullsrc=r=44100:cl=stereo",  # 生成静音
+                "-t", str(silence_duration), silent_audio
+            ])
+            safe_remove(combined_audio, "删除音频")
+            subprocess.run([
+                "ffmpeg", "-y",
+                "-i", ding, "-i", silent_audio, 
+                "-filter_complex", "[0:0][1:0]concat=n=2:v=0:a=1[out]", "-map", "[out]", combined_audio
+            ])
+            follow = combined_audio  # 更新音频路径
+
+
+
+        command = [
+            "ffmpeg", "-y", 
+            "-loop", "1", "-i", screenshot_path,  # 输入图片
+            "-i", follow,                  # 输入音频
+            "-c:v", "libx264",                    # 视频编码器
+            "-t",  str(voice_duration),        # 视频持续时间
+            "-pix_fmt", "yuv420p",                # 像素格式，确保兼容性
+            "-c:a", "aac",                        # 音频编码器
+            empty_path                             # 输出文件路径
+        ]
+
+        print(f"创建跟读视频: empty_path:{empty_path} command:{' '.join(command)}")
+        subprocess.run(command)
+        print(f"生成视频 {empty_path}")
+        #添加 “跟读” 到视频
+        add_text_to_video(empty_path,"跟读")
+        logging.info(f"创建行视频-跟读 {empty_path} {' '.join(command)}")
+
+        #删除句子朗读
+        safe_remove(content_voice, "生成视频片段")
+        safe_remove(content_voice2, "删除音频")
+        safe_remove(cn_voice, "删除音频")
+        safe_remove(child_voice, "删除音频")
+        safe_remove(child_voice, "删除音频")
+        safe_remove(combined_audio, "删除音频")
+        safe_remove(silent_audio, "删除音频")
+            
+def split_fragment_video(split_endtime_json_list,video_name,video_extension,video_split_dir,video):
+    id_counter = 0
+    for info in split_endtime_json_list:
+        id_counter += 1
+        start_time = info["st"]
+        end_time = info["et"]
+        cn_content = info["cn"]
+        en_content = info["en"]
+
+        split_name = f"{video_name}-{id_counter}{video_extension}"
+        output_path = os.path.join(video_split_dir, split_name)
+
+        start_seconds = convert_to_seconds(start_time)
+        end_seconds = convert_to_seconds(end_time)+0.1
+
+        video_totle_second = get_mp4_duration_ffmpeg(video)
+        if end_seconds > video_totle_second:
+            end_seconds = video_totle_second
+
+        command = [
+            "ffmpeg",
+            "-accurate_seek",
+            "-i", video,
+            "-ss", f"{start_seconds:.3f}",
+            "-to", f"{end_seconds:.3f}",
+            "-map", "0",  # 保留所有轨道
+            "-map_metadata", "-1",  # 清除全局元信息
+            "-c:v", "libx264",  # 强制重新编码视频
+            "-c:a", "aac",  # 强制重新编码音频
+            "-movflags", "use_metadata_tags",  # 生成符合新元信息标准的文件
+            output_path
+        ]
+
+        logging.info(f"按行分段保存 {output_path} video:{video} command:{' '.join(command)} en_content:{en_content}")
+        subprocess.run(command, check=True)
+
+def srt2json_info(srt_path):
+    split_endtime_json_list = []
+    with open(srt_path, "r", encoding="utf-8") as srt_file:
+        lines = srt_file.readlines()
+
+    for i in range(0, len(lines)):
+        if re.match(r"^\d+$", lines[i].strip()):
+            time_match = re.match(r"(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})", lines[i + 1].strip())
+            if time_match:
+                start_time, end_time = time_match.groups()
+                if detect_language(lines[i + 2].strip()) == "Chinese" or detect_language(lines[i + 2].strip()) == "Mixed" :
+                    chinese_content = lines[i + 2].strip()
+                    content = lines[i + 3].strip()
+                    info= {
+                        "st":start_time,
+                        "et":end_time,
+                        "cn":chinese_content,
+                        "en":content
+                    }
+                else:
+                    content = lines[i + 2].strip()
+                    chinese_content = lines[i + 3].strip()
+                    info = {
+                        "st":start_time,
+                        "et":end_time,
+                        "cn":chinese_content,
+                        "en":content
+                    }
+                split_endtime_json_list.append(info)
+    return split_endtime_json_list
 
 def split_video(args):
     srt_path = args.srt_path if args.srt_path else os.getcwd()
@@ -364,31 +858,12 @@ def split_video(args):
 
     video_extension = get_file_extension(video)
 
-    splite_endtime_json = {}
 
     if srt_path.endswith(".srt"):
         print(f"处理字幕文件: {srt_path}")
-
-        with open(srt_path, "r", encoding="utf-8") as srt_file:
-            lines = srt_file.readlines()
-
-        for i in range(0, len(lines)):
-            if re.match(r"^\d+$", lines[i].strip()):
-                time_match = re.match(r"(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})", lines[i + 1].strip())
-                if time_match:
-                    start_time, end_time = time_match.groups()
-                    content = lines[i + 2].strip()#英文在中文前的情况，否则调转
-                    chinese_content = lines[i + 3].strip()
-                    splite_endtime_json[content] = {
-                        "st":start_time,
-                        "et":end_time,
-                        "cn":chinese_content
-                    }
-                    # splite_endtime_json[content] = end_time
-
-        print(f"提取的字幕时间和内容: {splite_endtime_json}")
-        
-        logging.info("srt_path:%s\nsplite_endtime_json:\n%s\n",srt_path, splite_endtime_json)
+        split_endtime_json_list = srt2json_info(srt_path)
+        print(f"提取的字幕时间和内容: {split_endtime_json_list}")
+        logging.info("srt_path:%s\nsplit_endtime_json_list:\n%s\n",srt_path, split_endtime_json_list)
 
         video_name = os.path.splitext(os.path.basename(video))[0]
         screenshots_dir = os.path.join(os.path.dirname(video), "每行截图-"+video_name)
@@ -425,453 +900,17 @@ def split_video(args):
 
         video_name, _ = os.path.splitext(os.path.basename(video))
 
+        init_ai() # 初始化ai
+
         # 按照行字幕-分段原视频
-        id = 1
-        for content, times in splite_endtime_json.items():
-            start_time = times["st"]
-            end_time = times["et"]
+        split_fragment_video(split_endtime_json_list,video_name,video_extension,video_split_dir,video)
 
-            split_name = f"{video_name}-{id}{video_extension}"
-            output_path = os.path.join(video_split_dir, split_name)
+        # 按照行字幕-分段原视频-完整视频(上一行字幕的结束到这一行字幕的开始)
+        split_complete_video(split_endtime_json_list,video_name,video_extension,video_split_complete_dir,video)
 
-            start_seconds = convert_to_seconds(start_time)
-            end_seconds = convert_to_seconds(end_time)+0.1
-
-            video_totle_second = get_mp4_duration_ffmpeg(video)
-            if end_seconds > video_totle_second:
-                end_seconds = video_totle_second
-
-            command = [
-                "ffmpeg",
-                "-accurate_seek",
-                "-i", video,
-                "-ss", f"{start_seconds:.3f}",
-                "-to", f"{end_seconds:.3f}",
-                "-map", "0",  # 保留所有轨道
-                "-map_metadata", "-1",  # 清除全局元信息
-                "-c:v", "libx264",  # 强制重新编码视频
-                "-c:a", "aac",  # 强制重新编码音频
-                "-movflags", "use_metadata_tags",  # 生成符合新元信息标准的文件
-                output_path
-            ]
-
-            logging.info(f"按行分段保存 {output_path} video:{video} command:{' '.join(command)}")
-            subprocess.run(command, check=True)
-
-            id += 1
-
-
+        # 按照行字幕-分段原视频-不同视频(上一行字幕的结束到这一行字幕的开始)
+        split_different_video(split_endtime_json_list,video_name,video_extension,video,screenshots_dir,video_child_dir,video_cn_dir,video_clips_dir,video_clips_dir2,video_empty_dir,13,3)
         
-        # 按照行分段原视频-完整视频(上一行字幕的结束到这一行字幕的开始)
-        id = 1
-        st = "00:00:00,000"
-        # 将字典的键值对转换为列表
-        items = list(splite_endtime_json.items())
-        for i, (content, times) in enumerate(items):
-            if i == len(items) - 1:
-                # 这是最后一行
-                end_time = None
-            else:
-                end_time = times["et"]
-            
-
-            split_name = f"{video_name}-{id}{video_extension}"
-            output_path = os.path.join(video_split_complete_dir, split_name)
-
-            start_seconds = convert_to_seconds(st)
-            video_totle_second = get_mp4_duration_ffmpeg(video)
-
-            if end_time is None:
-                end_seconds = get_mp4_duration_ffmpeg(video)
-            else:
-                end_seconds = convert_to_seconds(end_time)
-                if end_seconds > video_totle_second:
-                    end_seconds = video_totle_second
-
-            command = [
-                "ffmpeg",
-                "-accurate_seek",
-                "-i", video,
-                "-ss", f"{start_seconds:.3f}",
-                "-to", f"{end_seconds:.3f}",
-                "-map", "0",  # 保留所有轨道
-                "-map_metadata", "-1",  # 清除全局元信息
-                "-c:v", "libx264",  # 强制重新编码视频
-                "-c:a", "aac",  # 强制重新编码音频
-                "-movflags", "use_metadata_tags",  # 生成符合新元信息标准的文件
-                output_path
-            ]
-
-            logging.info(f"按行完整保存 {output_path} video:{video} command:{' '.join(command)}")
-            subprocess.run(command, check=True)
-            
-            st = subtract_one_millisecond(end_time)
-            id += 1
-
-
-        # 创建各种视频
-        id_counter = 0
-
-        for content, attr in splite_endtime_json.items():
-            id_counter += 1
-            screenshot_name = f"{video_name}-{id_counter}.jpg"
-            screenshot_path = os.path.join(screenshots_dir, screenshot_name)
-
-
-            # 若改行字幕少于20个字符不生成跟读视频
-            if len(content) < 15:
-                continue
-
-
-            #edge-tts生成中文mp3
-            cn_voice = os.path.join(os.path.dirname(video),"cn_temp.mp3")
-            voice_command = [
-                sys.argv[0],  # This is the key change: use sys.argv[0]
-                "voice",
-                "edge_tts_voice",
-                "--content=" + attr["cn"],
-                "--save_path=" + cn_voice,
-                "--language=zh-cn"
-            ]
-
-            print("Executing command:", " ".join(voice_command))
-            result = subprocess.run(voice_command, capture_output=True, text=True, check=True)
-            print("Stdout:", result.stdout)
-            print("Stderr:", result.stderr)
-            print(f"File saved to: {cn_voice}")
-
-
-            #edge-tts生成儿童发音mp3
-            child_voice = os.path.join(os.path.dirname(video),"child_temp.mp3")
-            voice_command = [
-                sys.argv[0],  # This is the key change: use sys.argv[0]
-                "voice",
-                "edge_tts_voice",
-                "--content=" + content,
-                "--save_path=" + child_voice,
-                "--language=en-child"
-            ]
-
-            print("Executing command:", " ".join(voice_command))
-            result = subprocess.run(voice_command, capture_output=True, text=True, check=True)
-            print("Stdout:", result.stdout)
-            print("Stderr:", result.stderr)
-            print(f"File saved to: {child_voice}")
-
-
-            
-
-            #edge-tts生成英国英语女发音mp3
-            content_voice = os.path.join(os.path.dirname(video),"temp.mp3")
-            voice_command = [
-                sys.argv[0],  # This is the key change: use sys.argv[0]
-                "voice",
-                "edge_tts_voice",
-                "--content=" + content,
-                "--save_path=" + content_voice,
-                "--voice=en-GB-SoniaNeural"
-            ]
-
-            print("Executing command:", " ".join(voice_command))
-            result = subprocess.run(voice_command, capture_output=True, text=True, check=True)
-            print("Stdout:", result.stdout)
-            print("Stderr:", result.stderr)
-            print(f"File saved to: {content_voice}")
-
-
-
-            # #youdao翻译生成mp3
-            # content_voice = os.path.join(os.path.dirname(video),"temp.mp3")
-            # voice_command = [
-            #     sys.argv[0],  # This is the key change: use sys.argv[0]
-            #     "voice",
-            #     "youdao_voice",
-            #     "--content=" + content,
-            #     "--save_path=" + content_voice,
-            #     "--type=1"
-            # ]
-
-            # print("Executing command:", " ".join(voice_command))
-            # result = subprocess.run(voice_command, capture_output=True, text=True, check=True)
-            # print("Stdout:", result.stdout)
-            # print("Stderr:", result.stderr)
-            # print(f"File saved to: {content_voice}")
-
-            #edge-tts生成美国英语男发音mp3
-            content_voice2 = os.path.join(os.path.dirname(video),"temp2.mp3")
-            voice_command = [
-                sys.argv[0],  # This is the key change: use sys.argv[0]
-                "voice",
-                "edge_tts_voice",
-                "--content=" + content,
-                "--save_path=" + content_voice2,
-                "--voice=en-US-AndrewMultilingualNeural"
-            ]
-
-            print("Executing command:", " ".join(voice_command))
-            result = subprocess.run(voice_command, capture_output=True, text=True, check=True)
-            print("Stdout:", result.stdout)
-            print("Stderr:", result.stderr)
-            print(f"File saved to: {content_voice2}")
-
-            # #youdao翻译生成mp3（美音）
-            # content_voice2 = os.path.join(os.path.dirname(video),"temp2.mp3")
-            # voice_command2 = [
-            #     sys.argv[0],  # This is the key change: use sys.argv[0]
-            #     "voice",
-            #     "youdao_voice",
-            #     "--content=" + content,
-            #     "--save_path=" + content_voice2,
-            #     "--type=2"
-            # ]
-
-            # print("Executing command:", " ".join(voice_command2))
-
-            # # Use subprocess.run for cleaner handling of output and errors (Python 3.5+).
-            # result2 = subprocess.run(voice_command2, capture_output=True, text=True, check=True)
-
-            # # Print the output (stdout and stderr) for debugging or logging.
-            # print("Stdout:", result2.stdout)
-            # print("Stderr:", result2.stderr)
-            # print(f"File saved to: {content_voice2}")
-
-            #拼接音频“1s空白”和“中文内容”
-            cn_voice_duration = 0
-            if os.path.exists(cn_voice):
-                e = os.path.join(os.path.dirname(resource_filename(__name__,".")),'static', "empty1s.mp3")
-                merge_mp3_files(e , cn_voice)
-                cn_voice_duration = get_mp3_duration_tinytag(cn_voice)
-                print(f"voice_duration: {cn_voice_duration}")
-                if cn_voice_duration is None:
-                    continue
-
-                if cn_voice_duration <= 0:
-                    continue
-            else:
-                logging.error(f"创建音频失败 {cn_voice}")
-                continue
-
-            #拼接音频“1s空白”和“儿童内容”
-            child_voice_duration = 0
-            if os.path.exists(child_voice):
-                e = os.path.join(os.path.dirname(resource_filename(__name__,".")),'static', "empty1s.mp3")
-                merge_mp3_files(e , child_voice)
-                child_voice_duration = get_mp3_duration_tinytag(child_voice)
-                print(f"voice_duration: {child_voice_duration}")
-                if child_voice_duration is None:
-                    continue
-
-                if child_voice_duration <= 0:
-                    continue
-            else:
-                logging.error(f"创建音频失败 {child_voice}")
-                continue
-
-            #拼接音频“慢速”和“内容”
-            voice_duration = 0
-            if os.path.exists(content_voice):
-                ding = os.path.join(os.path.dirname(resource_filename(__name__,".")),'static', "ding.mp3")
-                merge_mp3_files(ding , content_voice)
-                voice_duration = get_mp3_duration_tinytag(content_voice)
-                print(f"voice_duration: {voice_duration}")
-                if voice_duration is None:
-                    continue
-
-                if voice_duration <= 0:
-                    continue
-            else:
-                logging.error(f"创建音频失败 {content_voice}")
-                continue
-
-            #拼接音频“1s空白”和“内容”（美音）
-            voice_duration2 = 0
-            if os.path.exists(content_voice2):
-                empty = os.path.join(os.path.dirname(resource_filename(__name__,".")),'static', "empty1s.mp3")
-                merge_mp3_files(empty , content_voice2)
-                voice_duration2 = get_mp3_duration_tinytag(content_voice2)
-                print(f"voice_duration: {voice_duration2}")
-                if voice_duration2 is None:
-                    continue
-                if voice_duration2 <= 0:
-                    continue
-            else:
-                logging.error(f"创建音频失败 {content_voice2}")
-                continue
-
-
-            #创建每行所需要的截图
-            end_seconds = convert_to_seconds(attr["et"])
-            # ffmpeg -y -i "C:\Users\luoruofeng\Desktop\test\视频片段\Lion King 2 1998-en@cn-3.mkv" -ss 5 -vframes 1 -vf scale=320:-1 -q:v 2 "C:\Users\luoruofeng\Desktop\test\视频片段\每行截图\Lion King 2 1998-en@cn-3-1.jpg"
-            command = [
-                "ffmpeg", "-y", "-i", video, "-ss", str(end_seconds-0.4), "-vframes", "1","-q:v", "2", screenshot_path
-            ]
-            logging.info(f"创建每行截图 video:{video} screenshot_path:{screenshot_path} command:{' '.join(command)}")
-            subprocess.run(command)
-
-            print(f"生成截图: {screenshot_path}")
-
-
-            #创建每行儿童发音视频
-            child_name = f"{video_name}-{id_counter}{video_extension}"
-            child_path = os.path.join(video_child_dir, child_name)
-
-            command = [
-                "ffmpeg", "-y", 
-                "-loop", "1", "-i", screenshot_path,  # 输入图片
-                "-i", child_voice,                  # 输入音频
-                "-c:v", "libx264",                    # 视频编码器
-                "-t",  str(child_voice_duration),        # 视频持续时间
-                "-pix_fmt", "yuv420p",                # 像素格式，确保兼容性
-                "-c:a", "aac",                        # 音频编码器
-                "-shortest",                          # 保证输出长度与最短流（音频或视频）匹配
-                child_path                             # 输出文件路径
-            ]
-
-            logging.info(f"创建儿童发音视频 child_path:{child_path} command:{' '.join(command)}")
-            subprocess.run(command)
-
-            print(f"生成视频片段: {child_path}")
-            #添加 “宝宝慢速” 到视频
-            add_text_to_video(child_path,"宝宝慢速")
-            logging.info(f"创建行视频-宝宝慢速 {child_path} {' '.join(command)}")
-
-            #创建每行中文视频
-            cn_name = f"{video_name}-{id_counter}{video_extension}"
-            cn_path = os.path.join(video_cn_dir, cn_name)
-
-            command = [
-                "ffmpeg", "-y", 
-                "-loop", "1", "-i", screenshot_path,  # 输入图片
-                "-i", cn_voice,                  # 输入音频
-                "-c:v", "libx264",                    # 视频编码器
-                "-t",  str(cn_voice_duration),        # 视频持续时间
-                "-pix_fmt", "yuv420p",                # 像素格式，确保兼容性
-                "-c:a", "aac",                        # 音频编码器
-                "-shortest",                          # 保证输出长度与最短流（音频或视频）匹配
-                cn_path                             # 输出文件路径
-            ]
-
-            logging.info(f"创建每行中文视频: cn_path:{cn_path} command:{' '.join(command)}")
-            subprocess.run(command)
-            print(f"生成视频片段: {cn_path}")
-            #添加 “中文” 到视频
-            add_text_to_video(cn_path,"中文")
-            logging.info(f"创建行视频-中文 {cn_path} {' '.join(command)}")
-
-
-
-            #创建每行发音视频
-            clip_name = f"{video_name}-{id_counter}{video_extension}"
-            clip_path = os.path.join(video_clips_dir, clip_name)
-
-            command = [
-                "ffmpeg", "-y", 
-                "-loop", "1", "-i", screenshot_path,  # 输入图片
-                "-i", content_voice,                  # 输入音频
-                "-c:v", "libx264",                    # 视频编码器
-                "-t",  str(voice_duration),        # 视频持续时间
-                "-pix_fmt", "yuv420p",                # 像素格式，确保兼容性
-                "-c:a", "aac",                        # 音频编码器
-                "-shortest",                          # 保证输出长度与最短流（音频或视频）匹配
-                clip_path                             # 输出文件路径
-            ]
-
-            logging.info(f"创建每行发音视频: clip_path:{clip_path} command:{' '.join(command)}")
-            subprocess.run(command)
-            print(f"生成视频片段: {clip_path}")
-            #添加 “美音慢速” 到视频
-            add_text_to_video(clip_path,"英音慢速")
-            logging.info(f"创建行视频-英音慢速 {clip_path} {' '.join(command)}")
-
-
-            #创建每行发音视频2
-            clip_name = f"{video_name}-{id_counter}{video_extension}"
-            clip_path2 = os.path.join(video_clips_dir2, clip_name)
-
-            command = [
-                "ffmpeg", "-y", 
-                "-loop", "1", "-i", screenshot_path,  # 输入图片
-                "-i", content_voice2,                  # 输入音频
-                "-c:v", "libx264",                    # 视频编码器
-                "-t",  str(voice_duration),        # 视频持续时间
-                "-pix_fmt", "yuv420p",                # 像素格式，确保兼容性
-                "-c:a", "aac",                        # 音频编码器
-                "-shortest",                          # 保证输出长度与最短流（音频或视频）匹配
-                clip_path2                             # 输出文件路径
-            ]
-
-            print(f"执行命令 创建每行发音视频2: clip_path2:{clip_path2} command:{' '.join(command)}")
-            subprocess.run(command)
-
-            print(f"生成视频片段: {clip_path2}")
-            #添加 “美音慢速” 到视频
-            add_text_to_video(clip_path2,"美音慢速")
-            logging.info(f"创建行视频-美音慢速 {clip_path2} {' '.join(command)}")
-            
-            
-
-            #创建每行跟读视频
-            empty_name = f"{video_name}-{id_counter}{video_extension}"
-            empty_path = os.path.join(video_empty_dir, empty_name)
-            
-            follow = os.path.join(os.path.dirname(resource_filename(__name__,".")),'static', "follow.mp3")
-            
-            #计算跟读后的静音时长
-            # 获取音频时长
-            audio_duration = float(subprocess.check_output(
-                ["ffprobe", "-i", ding, "-show_entries", "format=duration", "-v", "quiet", "-of", "csv=p=0"]
-            ).strip())
-
-            silence_duration = max(0, voice_duration - audio_duration)
-
-            #填充静音并生成完整音频
-            silent_audio = "silent.wav"
-            combined_audio = "combined.wav"
-            if silence_duration > 0:
-                safe_remove(silent_audio, "删除音频")
-                subprocess.run([
-                    "ffmpeg", "-y",
-                    "-f", "lavfi", "-i", f"anullsrc=r=44100:cl=stereo",  # 生成静音
-                    "-t", str(silence_duration), silent_audio
-                ])
-                safe_remove(combined_audio, "删除音频")
-                subprocess.run([
-                    "ffmpeg", "-y",
-                    "-i", ding, "-i", silent_audio, 
-                    "-filter_complex", "[0:0][1:0]concat=n=2:v=0:a=1[out]", "-map", "[out]", combined_audio
-                ])
-                follow = combined_audio  # 更新音频路径
-
-
-
-            command = [
-                "ffmpeg", "-y", 
-                "-loop", "1", "-i", screenshot_path,  # 输入图片
-                "-i", follow,                  # 输入音频
-                "-c:v", "libx264",                    # 视频编码器
-                "-t",  str(voice_duration),        # 视频持续时间
-                "-pix_fmt", "yuv420p",                # 像素格式，确保兼容性
-                "-c:a", "aac",                        # 音频编码器
-                empty_path                             # 输出文件路径
-            ]
-
-            print(f"创建跟读视频: empty_path:{empty_path} command:{' '.join(command)}")
-            subprocess.run(command)
-            print(f"生成视频 {empty_path}")
-            #添加 “跟读” 到视频
-            add_text_to_video(empty_path,"跟读")
-            logging.info(f"创建行视频-跟读 {empty_path} {' '.join(command)}")
-
-            #删除句子朗读
-            safe_remove(content_voice, "生成视频片段")
-            safe_remove(content_voice2, "删除音频")
-            safe_remove(cn_voice, "删除音频")
-            safe_remove(child_voice, "删除音频")
-            safe_remove(child_voice, "删除音频")
-            safe_remove(combined_audio, "删除音频")
-            safe_remove(silent_audio, "删除音频")
-            
-            
 
 # 删除文件前检查是否存在
 def safe_remove(file_path, description):
