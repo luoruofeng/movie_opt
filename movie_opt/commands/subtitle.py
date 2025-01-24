@@ -7,8 +7,12 @@ from PIL import Image, ImageDraw, ImageFont
 from movie_opt.utils import *
 import shutil
 from datetime import timedelta
-from movie_opt.commands.ai import get_phrase,get_hard_words
-
+from movie_opt.commands.ai import get_phrase,get_hard_words,ask_english_teacher_local_llm
+from movie_opt.qwen_utils import QwenPlusAssistant
+import ass
+import srt
+import re
+from datetime import timedelta
 
 def count_srt_statistics(args):
     """
@@ -227,7 +231,7 @@ def srt2ass(args):
         if file_name.endswith(".srt"):
             srt_file = os.path.join(path, file_name)
             ass_file = os.path.splitext(srt_file)[0] + ".ass"
-            format_srt(srt_file)
+            format_translation_srt(srt_file)
 
             print(f"转换文件: {srt_file} -> {ass_file}")
             subtitle_srt_to_ass(srt_file, ass_file)
@@ -302,26 +306,6 @@ def detect_encoding(file_path):
         result = chardet.detect(f.read())
         return result.get("encoding", "utf-8")
 
-def read_srt_file(file_path):
-    """读取 SRT 文件内容并按字幕块返回"""
-    encoding = detect_encoding(file_path)
-    with open(file_path, "r", encoding=encoding) as file:
-        content = file.read()
-    blocks = []
-    current_block = []
-
-    for line in content.splitlines():
-        if line.strip() == "":
-            if current_block:
-                blocks.append(current_block)
-                current_block = []
-        else:
-            current_block.append(line)
-    
-    if current_block:  # 如果最后一个块未添加
-        blocks.append(current_block)
-    
-    return blocks
 
 def write_srt_file(file_path, blocks):
     """将字幕块写入新的 SRT 文件"""
@@ -337,62 +321,6 @@ def is_time_equal(block1, block2):
     time1 = block1[1]
     time2 = block2[1]
     return time1 == time2
-
-def mergesrt(args):
-    print(f"SRT 文件夹路径: {args.path}")
-
-    # 如果路径为空，则使用当前目录
-    path = args.path if args.path else os.getcwd()
-
-    # 检查路径是否存在
-    if not os.path.exists(path):
-        print(f"路径不存在: {path}")
-        return
-
-    # 获取所有 SRT 文件
-    srt_files = [f for f in os.listdir(path) if f.endswith(".srt")]
-    merged_files = set()
-
-    for i, file1 in enumerate(srt_files):
-        if file1 in merged_files:
-            continue
-        
-        for file2 in srt_files[i+1:]:
-            if file2 in merged_files:
-                continue
-            
-            file1_path = os.path.join(path, file1)
-            file2_path = os.path.join(path, file2)
-
-            # 读取两个文件内容
-            blocks1 = read_srt_file(file1_path)
-            blocks2 = read_srt_file(file2_path)
-
-            # 检查时间戳数量和对应的时间是否相同
-            if len(blocks1) == len(blocks2) and all(is_time_equal(b1, b2) for b1, b2 in zip(blocks1, blocks2)):
-                merged_blocks = []
-
-                for b1, b2 in zip(blocks1, blocks2):
-                    # 合并内容
-                    time_line = b1[1]  # 时间戳行
-                    merged_content = b2[2:] + b1[2:]  # 英文在上，中文在下
-                    merged_blocks.append([time_line] + merged_content)
-
-                # 保存新文件
-                merged_file_name = os.path.splitext(file1)[0] + "_merged.srt"
-                merged_file_path = os.path.join(path, merged_file_name)
-                write_srt_file(merged_file_path, merged_blocks)
-
-                # 标记为已处理并删除原文件
-                merged_files.add(file1)
-                merged_files.add(file2)
-                os.remove(file1_path)
-                os.remove(file2_path)
-
-                print(f"合并并删除: {file1} 和 {file2} -> {merged_file_name}")
-                break
-    print("合并完成！")
-
 
 
 def sequencesrt(args):
@@ -469,6 +397,29 @@ def sequencesrt(args):
 
 
 colors_ex = {"tell": "red", "about": "blue","告诉":"yellow","我的家":"blue"}
+
+def extract_text_from_srt(file_path,split_symbol=",\n"):
+    """
+    从 SRT 文件提取纯文本内容，去除编号、时间戳和空行。
+    
+    :param file_path: SRT 文件路径
+    :return: 提取的文本内容（字符串）
+    """
+    with open(file_path, 'r', encoding='utf-8') as srt_file:
+        content = srt_file.read()
+        print(content)
+        # 逐行处理 SRT 文件
+        lines = content.splitlines()
+        txt = []
+        for line in lines:
+            # 跳过编号、时间戳和空行
+            if re.match(r'^\d+$', line) or re.match(r'\d{2}:\d{2}:\d{2},\d{3}', line) or line.strip() == '':
+                continue
+            txt.append(line.strip())
+        
+        return split_symbol.join(txt)
+    return None
+
 def srt2txtpng(args):
     print(f"SRT 文件夹路径: {args.path}")
 
@@ -485,26 +436,15 @@ def srt2txtpng(args):
         if file_name.endswith(".srt"):
             file_path = os.path.join(path, file_name)
             
-            # 提取 SRT 文件中的字幕内容
-            with open(file_path, 'r', encoding='utf-8') as srt_file:
-                content = srt_file.read()
-            
-            # 去掉编号、时间和空行，只保留字幕内容
-            lines = content.splitlines()
-            txt = []
-            for line in lines:
-                # 匹配时间格式：00:00:00,000 --> 00:00:00,000 或者编号
-                if re.match(r'^\d+$', line) or re.match(r'\d{2}:\d{2}:\d{2},\d{3}', line) or line.strip() == '':
-                    continue
-                txt.append(line.strip())
-            txt = "\n".join(txt)
+            # 调用新封装的方法提取文本
+            txt = extract_text_from_srt(file_path)
             
             # 生成 PNG 保存路径
             output_png_path = os.path.join(path, os.path.splitext(file_name)[0] + ".png")
             
             # 创建 PNG
             create_png_with_text(txt, output_png_path)
-            print(f"处理完成：{output_png_path}")
+            print(f"处理完成：{output_png_path}")    
 
 from PIL import Image
 
@@ -625,7 +565,7 @@ def write_srt_file(output_folder, original_name, index, segments):
     with open(output_path, "w", encoding="utf-8") as f:
         f.write("\n".join(segments))
     print(f"写入文件: {output_path}")
-    format_srt(output_path) # 格式化
+    format_translation_srt(output_path) # 格式化
 
 
 
@@ -827,3 +767,245 @@ def convert_time(args):
         process_srt(path)
     else:
         print("输入的路径无效或不包含 .srt 文件！")
+
+
+
+from enum import Enum
+class PUNCTUATION_MARK(Enum):
+    SEQUENCE = 1
+    TIME_STAMP = 2
+    CONTENT = 3
+    
+
+# 重新排版srt文件
+def reposition_srt(args):
+    # 检查 args.path 是否存在且是否是文件夹
+    if not os.path.exists(args.path):
+        print(f"路径 {args.path} 不存在。")
+        return
+
+    srt = args.path
+    convert_to_utf8(srt)
+    txt = extract_text_from_srt(srt) # 提取srt中的文本内容
+    txt = txt.replace("\n","")
+    txt = remove_brackets_content(txt,holder_token=" ")
+
+    print(f" srt文件内容:{txt}")
+    remove_non_alphanumeric_txt =  remove_non_alphanumeric(txt)
+
+    # 重新划分文本内容的标点符号
+    sentences = None
+    for i in range(4):
+        print(f"第{i+1}次本地模型尝试")
+        reply = ask_english_teacher_local_llm("不增加任何单词，不减少任何单词以及不改变任何单词顺序的情况下，语法和单词错误也不改变任何单词以及单词顺序的情况下，删除这段话中错误的标点符号，添加正确的标点符号，直接回答，不要回复任何无效内容，不要回复任何描述语言："+txt,model_name="qwen2.5:14b")
+        reply = reply.replace("\n","")
+        if remove_non_alphanumeric(reply) != remove_non_alphanumeric_txt:
+            print(f"reply:{reply}")
+            print(f"第{i+1}次本地模型尝试失败 字符数:{len(remove_non_alphanumeric(reply))} 正确字符数:{len(remove_non_alphanumeric_txt)}")
+            continue
+        else:
+            sentences = split_sentences(reply)
+            break
+    
+    if sentences is None:
+        QWEN_ASSISTANT = QwenPlusAssistant( model='qwen-max')
+        for i in range(3):
+            print(f"第{i+1}次远程模型尝试")
+            qwen_assistant = QWEN_ASSISTANT.converse("不增加任何单词，不减少任何单词以及不改变任何单词顺序的情况下，语法和单词错误也不改变任何单词以及单词顺序的情况下，删除这段话中错误的标点符号，添加正确的标点符号，直接回答，不要回复任何无效内容，不要回复任何描述语言："+txt)
+            reply = reply.replace("\n","")
+            if remove_non_alphanumeric(reply) == remove_non_alphanumeric_txt:
+                sentences = split_sentences(reply)
+                break
+            else:
+                print(f"reply:{reply}")
+                print(f"第{i+1}次远程模型尝试失败 字符数:{len(remove_non_alphanumeric(reply))} 正确字符数:{len(remove_non_alphanumeric_txt)}")
+                continue
+        
+    if sentences is None:
+        raise Exception("重新划分文本内容的标点符号失败,无法使用大模型重新划分文本内容的标点符号")
+    
+    # 定义匹配 SRT 时间戳的正则表达式
+    time_pattern = re.compile(r'\d{2}:\d{2}:\d{2},\d{3} --> \d{2}:\d{2}:\d{2},\d{3}')
+    sentence_index = 0
+    character_count = 0
+    result = []
+    # 遍历 SRT 文件中的每一行
+    with open(srt, 'r', encoding='utf-8') as file:
+        while True:
+            previous_line_type = None
+            st,et = None,None
+            cc = None
+            cline_number = None
+            cst, cet = None,None
+            for line_number, line in enumerate(file, start=1):
+                stripped_line = line.strip()
+                stripped_line = stripped_line.replace("\n","")
+
+                if not stripped_line:
+                    print(f"第 {line_number} 行: 空行")
+                elif stripped_line.isdigit(): # 序号
+                    print(f"第 {line_number} 行: 序号 ({stripped_line})")
+                    previous_line_type = PUNCTUATION_MARK.SEQUENCE
+                elif time_pattern.match(stripped_line): # 时间戳
+                    time_match = re.match(r"(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})", stripped_line)
+                    if time_match:
+                        cst,cet = time_match.groups()
+                        previous_line_type = PUNCTUATION_MARK.TIME_STAMP
+                        
+                else: # 内容
+                    s = sentences[sentence_index]
+                    if stripped_line in s:
+                        cc += stripped_line
+                        remove_punctuation_s = remove_non_alphanumeric(s)
+                        remove_punctuation_stripped_line = remove_non_alphanumeric(stripped_line)
+                        len_remove_punctuation_s = len(remove_punctuation_s)
+                        len_remove_punctuation_stripped_line = len(remove_punctuation_stripped_line)
+                        character_count += len_remove_punctuation_stripped_line
+                        print(f"第 {line_number} 行: 内容 ({stripped_line}) remove_punctuation_s: {remove_punctuation_s} remove_punctuation_stripped_line: {remove_punctuation_stripped_line} len_remove_punctuation_s: {len_remove_punctuation_s} len_remove_punctuation_stripped_line: {len_remove_punctuation_stripped_line} character_count: {character_count}")
+                        
+                        if str.startswith(remove_punctuation_s, remove_punctuation_stripped_line):
+                            st = cst
+                            print(f"设置st: {st}")
+                        if str.endswith(remove_punctuation_s, remove_punctuation_stripped_line) and character_count >= len_remove_punctuation_s:
+                            et = cet
+                            print(f"设置et: {et}")
+                            item = [str(sentence_index),st+" --> "+et,cc]
+                            result.append(item)
+                            sentence_index += 1
+                            character_count = 0
+                    previous_line_type = PUNCTUATION_MARK.CONTENT
+    print(f"result: {result}")
+    # 将结果写入文件
+    with open(srt, 'w', encoding='utf-8') as file:
+        for sublist in result:
+            print(f"写入文件: {srt}")
+            file.write("\n".join(map(str, sublist)) + "\n\n")
+    return result
+
+
+#合并中英文srt文件
+def mergesrt(args):
+    print(f"SRT 文件夹路径: {args.path}")
+
+    # 如果路径为空，则使用当前目录
+    path = args.path if args.path else os.getcwd()
+
+    # 检查路径是否存在
+    if not os.path.exists(path):
+        print(f"路径不存在: {path}")
+        return
+
+    # 获取所有 SRT 文件
+    srt_files = [f for f in os.listdir(path) if f.endswith(".srt")]
+    
+    if len(srt_files) < 2:
+        print("没有找到两个以上的SRT文件")
+        return
+    
+    if len(srt_files) > 2:
+        print("没有找到两个以上的SRT文件")
+        return
+    
+    f1 = srt_files[0]
+    f2 = srt_files[1]
+    previous_line_type = None
+    match_timestamp = False
+    f2_read_cursor = 0
+    time_pattern = re.compile(r'\d{2}:\d{2}:\d{2},\d{3} --> \d{2}:\d{2}:\d{2},\d{3}')
+    
+    result = []
+    with open(os.path.join(path, f1), "r", encoding="utf-8") as f1_file, open(os.path.join(path, f2), "r", encoding="utf-8") as f2_file:
+        f1_content = f1_file.readlines()
+        f2_content = f2_file.readlines()
+
+
+        for line in f1_content:
+            stripped_line = line.strip()
+
+            if not stripped_line:
+                result.append("\n") # 空
+            elif stripped_line.isdigit(): # 序号
+                result.append(stripped_line)
+                previous_line_type = PUNCTUATION_MARK.SEQUENCE
+            elif time_pattern.match(stripped_line): # 时间戳
+                time_match = re.match(r"(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})", stripped_line)
+                if time_match:
+                    cst,cet = time_match.groups()
+                    result.append(stripped_line)
+                    for f2_line in f2_content[f2_read_cursor:]:
+                        f2_stripped_line = f2_line.strip()
+                        if not f2_stripped_line:
+                            pass # 空
+                        elif time_pattern.match(stripped_line):
+                            time_match = re.match(r"(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})", stripped_line)
+                            if time_match:
+                                st2,et2 = time_match.groups()
+                                st2f = timestamp_convert_to_seconds(st2)
+                                et2f = timestamp_convert_to_seconds(et2)
+                                cstf = timestamp_convert_to_seconds(cst)
+                                cetf = timestamp_convert_to_seconds(cet)
+                                if (st2f > cstf and et2f > cetf):
+                                    match_timestamp = False
+                                    break
+                                elif st2f == cstf and et2f == cetf:
+                                    f2_read_cursor += 1
+                                    match_timestamp = True
+                                    break
+                                else:
+                                    match_timestamp = False
+                                    f2_read_cursor += 1
+                                    continue
+                            else:
+                                f2_read_cursor += 1
+                                continue
+                        else:
+                            f2_read_cursor += 1
+                            continue
+
+                    previous_line_type = PUNCTUATION_MARK.TIME_STAMP
+                    
+            else: # 内容
+                result.append(stripped_line)
+                if match_timestamp:
+                    if previous_line_type == PUNCTUATION_MARK.CONTENT:
+                        f2_read_cursor+=1
+                        result.append(f2_content[f2_read_cursor]+"\n")
+                    else:
+                        result.append(f2_content[f2_read_cursor]+"\n")
+                previous_line_type = PUNCTUATION_MARK.CONTENT
+    print(f"合并后的结果: {result}")
+    # 将结果写入文件
+    with open(os.path.join(path, f1), "w", encoding="utf-8") as f1_file:
+        f1_file.write("\n".join(result))
+    # 删除 f2 文件
+    os.remove(os.path.join(path, f2))
+    print("合并完成！")
+
+
+
+def convert_ass_to_srt(args):
+    """
+    将给定的 ASS 字幕文件转换为同名的 SRT 字幕文件，并保存。
+    :param ass_file_path: str, ASS 字幕文件的路径
+    """
+    ass_file_path = args.path
+    srt_file_path = ass_file_path.rsplit('.', 1)[0] + ".srt"
+    
+    with open(ass_file_path, encoding="utf-8-sig") as f:
+        doc = ass.parse(f)
+    
+    subtitles = []
+    for index, event in enumerate(doc.events, start=1):
+        start = timedelta(seconds=event.start.total_seconds())
+        end = timedelta(seconds=event.end.total_seconds())
+        text = re.sub(r"\{\\.*?\}", "", event.text)  # 使用正则删除大括号及其内容
+        text = text.replace("\\N", "\n")  # 处理换行符
+        
+        subtitles.append(srt.Subtitle(index, start, end, text))
+    
+    with open(srt_file_path, "w", encoding="utf-8") as f:
+        f.write(srt.compose(subtitles))
+    
+    print(f"转换完成: {srt_file_path}")
+
+

@@ -103,6 +103,21 @@ def get_most_hard_word(cn_str,en_str):
 
 
 def score_for_word(most_hard_word,en_str):
+    q = f"给这个单词的难度打分，0到10分的范围，只告诉我分数无需其他任何信息：{most_hard_word}"
+    reply = ask_english_teacher_local_llm(q,model_name="qwen2.5:14b")
+    logging.info("提问："+q+"\n回答：\n"+reply+"\n")
+    print("提问："+q+"\n回答：\n"+reply+"\n")
+    pattern = r'\d+'# 正则表达式模式匹配所有数字
+    matches = re.findall(pattern, reply)# 查找所有匹配的部分
+    numbers = [int(match) for match in matches]# 将找到的所有数字字符串转换为整数列表
+    if len(numbers) == 0:
+        print("没有找到数字")
+        return 0
+    score = numbers[0]
+    if score is None:
+        print("没有找到数字")
+        return 0
+
     q = f"在{en_str}这句话中{most_hard_word}是名字吗,回答“是”或者“不是”"
     result = ask_english_teacher_local_llm(q,model_name="qwen2.5:14b")
     logging.info("提问："+q+"\n回答：\n"+result+"\n")
@@ -119,20 +134,6 @@ def score_for_word(most_hard_word,en_str):
     if result is None or len(result) == 0 or result.strip()=="是":
         return 0
 
-    q = f"给这个单词的难度打分，0到10分的范围，只告诉我分数无需其他任何信息：{most_hard_word}"
-    reply = ask_english_teacher_local_llm(q,model_name="qwen2.5:14b")
-    logging.info("提问："+q+"\n回答：\n"+reply+"\n")
-    print("提问："+q+"\n回答：\n"+reply+"\n")
-    pattern = r'\d+'# 正则表达式模式匹配所有数字
-    matches = re.findall(pattern, reply)# 查找所有匹配的部分
-    numbers = [int(match) for match in matches]# 将找到的所有数字字符串转换为整数列表
-    if len(numbers) == 0:
-        print("没有找到数字")
-        return 0
-    score = numbers[0]
-    if score is None:
-        print("没有找到数字")
-        return 0
     return score
 
 # 使用本地模型给英语难度评分
@@ -209,8 +210,8 @@ def get_hard_words(cn_str,en_str):
         if score is None:
             print("单词难度打分没有找到数字")
             continue
-        if score < 6:
-            print(f"单词难度小于6，跳过")
+        if score < 5:
+            print(f"单词难度小于5，跳过")
             continue
 
         q = f"翻译{most_hard_word}，只显示翻译不显示其他无用内容"

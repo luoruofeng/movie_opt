@@ -13,7 +13,7 @@ setup_logging()
 
 import argparse
 from movie_opt.commands.create import create_pc, create_phone
-from movie_opt.commands.subtitle import change_ass_hard_word_style, count_srt_statistics, convert_time, srtsegment, srt2ass, addass, mergesrt, sequencesrt, srt2txtpng
+from movie_opt.commands.subtitle import convert_ass_to_srt,reposition_srt, change_ass_hard_word_style, count_srt_statistics, convert_time, srtsegment, srt2ass, addass, mergesrt, sequencesrt, srt2txtpng
 from movie_opt.commands.picture import generate_images,split_video, video_segment, cut_pc2phone, scale_pc2phone, add_text
 from movie_opt.commands.ai import get_hard_words_and_set_color
 from movie_opt.commands.translate import find_db_word
@@ -52,6 +52,15 @@ def main():
     subparser_subtitle_srt2ass.add_argument("--path", required=False, help="srt的文件夹路径")
     subparser_subtitle_srt2ass.set_defaults(func=srt2ass)
 
+    # Command subtitle -> Subcommand reposition_srt
+    subparser_subtitle_reposition_srt = subparser_subtitle.add_parser("reposition_srt", help="将英文的srt文件中的英文重新排版")
+    subparser_subtitle_reposition_srt.add_argument("--path", required=False, help="srt的文件夹路径")
+    subparser_subtitle_reposition_srt.set_defaults(func=reposition_srt)
+
+    # Command subtitle -> Subcommand ass_to_srt
+    subparser_subtitle_ass_to_srt = subparser_subtitle.add_parser("ass_to_srt", help="将ass转化为srt")
+    subparser_subtitle_ass_to_srt.add_argument("--path", required=False, help="srt的文件夹路径")
+    subparser_subtitle_ass_to_srt.set_defaults(func=convert_ass_to_srt)
 
     
     # Command subtitle -> Subcommand change_ass_hard_word_style

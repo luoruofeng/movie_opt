@@ -308,8 +308,8 @@ def video_segment(args):
         print(f"准备处理视频片段: {output_filename}")
 
         if not os.path.exists(output_filename):
-            start_seconds = convert_to_seconds(segment['start'])
-            end_seconds = convert_to_seconds(segment['end'])
+            start_seconds = timestamp_convert_to_seconds(segment['start'])
+            end_seconds = timestamp_convert_to_seconds(segment['end'])
 
             print(f"输出片段文件: {output_filename}")
 
@@ -336,14 +336,6 @@ def video_segment(args):
                 print(f"截取片段失败: {output_filename}, 错误: {e}")
     
     
-def convert_to_seconds(timestamp):
-    """
-    将时间戳 (hh:mm:ss,ms) 转换为以秒为单位的浮点数。
-    """
-    hours, minutes, seconds, milliseconds = re.match(r"(\d{2}):(\d{2}):(\d{2}),(\d{3})", timestamp).groups()
-    total_seconds = int(hours) * 3600 + int(minutes) * 60 + int(seconds) + int(milliseconds) * 0.001
-    return total_seconds
-
 
 def split_complete_video(split_endtime_json_list,video_name,video_extension,video_split_complete_dir,video):
     # 按照行分段原视频-完整视频(上一行字幕的结束到这一行字幕的开始)
@@ -367,13 +359,13 @@ def split_complete_video(split_endtime_json_list,video_name,video_extension,vide
             split_name = f"{video_name}-{id_counter}{video_extension}"
             output_path = os.path.join(video_split_complete_dir, split_name)
 
-            start_seconds = convert_to_seconds(st)
+            start_seconds = timestamp_convert_to_seconds(st)
             video_totle_second = get_mp4_duration_ffmpeg(video)
 
             if end_time is None:
                 end_seconds = get_mp4_duration_ffmpeg(video)
             else:
-                end_seconds = convert_to_seconds(end_time)
+                end_seconds = timestamp_convert_to_seconds(end_time)
                 if end_seconds > video_totle_second:
                     end_seconds = video_totle_second
 
@@ -411,16 +403,19 @@ def split_different_video(split_endtime_json_list,video_name,video_extension,vid
             logging.info(f"英文字幕少于{filter_count}个字符不生成跟读视频 {en_content} id:{id_counter}")
             continue
         
-        # 最难的单词分数低于filter_score分不生成跟读视频
-        try:
-            score = get_english_difficulty_local_llm(cn_content,en_content)
-            if score < filter_score:
-                logging.info(f"最难的单词分数低于{filter_score}分不生成跟读视频 {en_content} id:{id_counter}")
+        # 如果字数大于33个 则生成跟读视频 小于33 则判断最难的单词分数是否低于filter_score分
+        if len(en_content) < 33:
+            # 最难的单词分数低于filter_score分不生成跟读视频
+            try:
+                score = get_english_difficulty_local_llm(cn_content,en_content)
+                if score < filter_score:
+                    logging.info(f"最难的单词分数低于{filter_score}分不生成跟读视频 {en_content} id:{id_counter}")
+                    continue
+            except Exception as e:
+                logging.error(f"本地模型单词评分发送异常",exc_info=True)
+                traceback.print_exc()
                 continue
-        except Exception as e:
-            logging.error(f"本地模型单词评分发送异常",exc_info=True)
-            traceback.print_exc()
-            continue
+            
         screenshot_name = f"{video_name}-{id_counter}.jpg"
         screenshot_path = os.path.join(screenshots_dir, screenshot_name)
         
@@ -601,7 +596,7 @@ def split_different_video(split_endtime_json_list,video_name,video_extension,vid
 
 
         #创建每行所需要的截图
-        end_seconds = convert_to_seconds(info["et"])
+        end_seconds = timestamp_convert_to_seconds(info["et"])
         # ffmpeg -y -i "C:\Users\luoruofeng\Desktop\test\视频片段\Lion King 2 1998-en@cn-3.mkv" -ss 5 -vframes 1 -vf scale=320:-1 -q:v 2 "C:\Users\luoruofeng\Desktop\test\视频片段\每行截图\Lion King 2 1998-en@cn-3-1.jpg"
         command = [
             "ffmpeg", "-y", "-i", video, "-ss", str(end_seconds-0.4), "-vframes", "1","-q:v", "2", screenshot_path
@@ -784,8 +779,8 @@ def split_fragment_video(split_endtime_json_list,video_name,video_extension,vide
         split_name = f"{video_name}-{id_counter}{video_extension}"
         output_path = os.path.join(video_split_dir, split_name)
 
-        start_seconds = convert_to_seconds(start_time)
-        end_seconds = convert_to_seconds(end_time)+0.1
+        start_seconds = timestamp_convert_to_seconds(start_time)
+        end_seconds = timestamp_convert_to_seconds(end_time)+0.1
 
         video_totle_second = get_mp4_duration_ffmpeg(video)
         if end_seconds > video_totle_second:

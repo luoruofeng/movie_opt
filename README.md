@@ -22,10 +22,20 @@ movie_opt.exe picture cut_pc2phone --path="C:\Users\luoruofeng\Desktop\test"
 movie_opt.exe picture generate_images --path="C:\Users\luoruofeng\Desktop\test\video.mp4"
 ```
 
+## 将英文的srt文件中的英文重新排版
+```
+movie_opt.exe subtitle reposition_srt --path="C:\Users\luoruofeng\Desktop\a.srt"
+```
+
 
 ## 将srt字幕转化ass字幕文件
 ```
 movie_opt.exe subtitle srt2ass --path="C:\Users\luoruofeng\Desktop\test"
+```
+
+## 将ass字幕转化srt字幕文件
+```
+movie_opt.exe subtitle convert_ass_to_srt --path="C:\Users\luoruofeng\Desktop\test\test.ass"
 ```
 
 

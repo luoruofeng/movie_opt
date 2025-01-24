@@ -6,7 +6,8 @@ import traceback
 from movie_opt.utils import *
 import re
 from movie_opt.commands.merge import delete_folders_except_merge
-
+from movie_opt.commands.ai import *
+from movie_opt.commands.subtitle import extract_text_from_srt, reposition_srt
 
 @timing_decorator
 def custom1(args):
@@ -29,7 +30,6 @@ def custom1(args):
             # 只处理子文件夹
             if os.path.isdir(subdir_path):
                 # 指定文件夹路径下的所有文件重命名为与该文件夹同名
-                # TODO 放开
                 # rename_files_to_parent_folder(subdir_path)
                 #找到视频文件
                 videos = find_video_files(subdir_path)
@@ -46,28 +46,31 @@ def custom1(args):
                 print(f"正在处理子文件夹: {subdir_path}")
                 c = sys.argv[0]
                 
-                print("创建封面")
-                command = [
-                    c,
-                    "picture", 
-                    "generate_images", 
-                    "--path="+v
-                ]
-                print(f"执行命令: {' '.join(command)}")
-                subprocess.run(command,check=True)
+                if not os.path.exists(os.path.join(subdir_path,"picture")):
+                    print("创建封面")
+                    command = [
+                        c,
+                        "picture", 
+                        "generate_images", 
+                        "--path="+v
+                    ]
+                    print(f"执行命令: {' '.join(command)}")
+                    subprocess.run(command,check=True)
                 
 
-                print("将srt字幕转化ass字幕文件")
-                command = [
-                    c,
-                    "subtitle", 
-                    "srt2ass", 
-                    "--path="+subdir_path
-                ]
-                print(f"执行命令: {' '.join(command)}")
-                subprocess.run(command,check=True)
+                if not os.path.exists(ass):
+                    print("将srt字幕转化ass字幕文件")
+                    command = [
+                        c,
+                        "subtitle", 
+                        "srt2ass", 
+                        "--path="+subdir_path
+                    ]
+                    print(f"执行命令: {' '.join(command)}")
+                    subprocess.run(command,check=True)
                 
                 
+
                 print("修改ass复杂单词的颜色")
                 command = [
                     c,
@@ -76,7 +79,7 @@ def custom1(args):
                     "--path="+ass
                 ]
                 print(f"执行命令: {' '.join(command)}")
-                subprocess.run(command,check=True)
+                # subprocess.run(command,check=True)
 
                 print("给视频添加ass字幕")
                 command = [
@@ -86,9 +89,13 @@ def custom1(args):
                     "--path="+subdir_path
                 ]
                 print(f"执行命令: {' '.join(command)}")
-                subprocess.run(command,check=True)
+                # subprocess.run(command,check=True)
 
-                
+                # 如果视频文件名不是以subtitle_开头，则将视频文件名改为subtitle_+视频文件名
+                v_basename = os.path.basename(v)
+                if not str.startswith(v_basename, "subtitle_"):
+                    v = os.path.join(subdir_path,"subtitle_"+v_basename)
+
                 print("将srt文件按照时间间隔分段保存为新的srt文件")
                 command = [
                     c,
@@ -109,7 +116,7 @@ def custom1(args):
                 #     "--path="+subdir_path
                 # ]
                 # print(f"执行命令: {' '.join(command)}")
-                subprocess.run(command,check=True)
+                # subprocess.run(command,check=True)
 
                 
 
@@ -221,4 +228,38 @@ def custom1(args):
     print("所有子文件夹处理完成。")
 
 
+def custom3(args):
+    # 检查 args.path 是否存在且是否是文件夹
+    if not os.path.exists(args.path):
+        print(f"路径 {args.path} 不存在。")
+        return
+    if not os.path.isdir(args.path):
+        print(f"{args.path} 不是一个有效的文件夹。")
+        return
+    
+    # 循环处理文件夹内的子文件夹
+    for subdir in os.listdir(args.path):
+        try:
+            subdir_path = os.path.join(args.path, subdir)
+            print(f"正在处理子文件夹: {subdir_path}")
+            #找到srt文件
+            srts = find_srt_files(subdir_path)
+            if srts is None or len(srts) <= 0:
+                raise RuntimeError(f"{subdir_path}文件夹下没有srt文件")
 
+            c = sys.argv[0]
+            print("重新排版srt英文内容的标点符号")
+            command = [
+                c,
+                "subtitle", 
+                "reposition_srt", 
+                "--path="+v
+            ]
+            print(f"执行命令: {' '.join(command)}")
+            subprocess.run(command,check=True)
+        except Exception as e:
+            print(f"处理 {subdir_path} 时出错，错误: {str(e)}")
+            logging.error(f"处理 {subdir_path} 时出错，错误: {str(e)}")
+            traceback.print_exc()
+            continue  # 如果出错，跳过当前子文件夹，继续下一个
+            

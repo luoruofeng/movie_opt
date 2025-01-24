@@ -14,8 +14,44 @@ import logging
 import chardet
 import time
 from functools import wraps
-
 import re
+
+
+def remove_non_alphanumeric(text: str) -> str:
+    """
+    只保留字符串中的大小写英文字母和数字，去除所有其他符号、空格和换行。
+
+    :param text: 输入字符串
+    :return: 处理后的字符串
+    """
+    return re.sub(r'[^a-zA-Z0-9]', '', text)
+    
+
+def remove_punctuation_and_spaces(text: str) -> str:
+    """
+    移除字符串中的所有标点符号和空格，并返回处理后的字符串。
+
+    :param text: 需要处理的字符串
+    :return: 去除标点符号和空格后的字符串
+    """
+    return re.sub(r'[，。！？、；：“”‘’()[\]{}<>《》,.\"\'?!<>*&$#@:;\s]', '', text)
+
+def split_sentences(text: str):
+    """
+    根据标点符号将文本拆分为句子，并正确处理双引号包裹的句子。
+
+    :param text: 输入的文本
+    :return: 句子列表
+    """
+    # 正则匹配：识别句子，保留可能的双引号包裹情况
+    pattern = re.compile(r'[^。！？]*?"[^"]*?"[^。！？]*?[。！？]|[^。！？]+[。！？]?')
+
+    sentences = pattern.findall(text)
+
+    # 去除前后空格
+    sentences = [s.strip() for s in sentences if s.strip()]
+    
+    return sentences
 
 def detect_language(text):
     """
@@ -35,10 +71,11 @@ def detect_language(text):
 
 
 
-def remove_brackets_content(s):
-    return re.sub(r'\[[^\]]*\]|\([^)]*\)', '', s)
+def remove_brackets_content(s,holder_token=""):
+    return re.sub(r'\[[^\]]*\]|\([^)]*\)', holder_token, s)
 
-def format_srt(input_file: str):
+
+def format_translation_srt(input_file: str):
     print("Formatting SRT file...")
 
     # 读取文件内容
@@ -62,7 +99,7 @@ def format_srt(input_file: str):
         # 去除多余空行
         line_content = text_lines.split("\n")
         if len(line_content) <= 1:
-            print(f"删除字幕没有换行也就是只有中文或是只有中文的字幕 {number} {timestamp} {text_lines}")
+            print(f"删除字幕:只有中文或是只有中文的字幕 {number} {timestamp} {text_lines}")
             continue
         
         if line_content[0].isdigit():
@@ -148,7 +185,7 @@ def rename_files_to_parent_folder(folder_path):
             expected_file_name = f"{parent_folder_name}{file_extension}"
             
             # 仅当文件名与父文件夹名不同才重命名
-            if file_name != expected_file_name:
+            if file_name != expected_file_name and not str.startswith(file_name, "subtitle_"):
                 new_file_path = os.path.join(folder_path, expected_file_name)
                 os.rename(file_path, new_file_path)
                 print(f"Renamed '{file_name}' to '{expected_file_name}'.")
@@ -214,7 +251,7 @@ def convert_to_utf8(file_path):
 
         print(f"检测到文件 '{file_path}' 的编码为: {original_encoding} (置信度: {confidence:.2f})")
         
-        if original_encoding == 'utf-8':
+        if original_encoding.lower() == 'utf-8':
             return 
         
         if not original_encoding:
@@ -577,6 +614,17 @@ def subtract_one_millisecond(time_str: str) -> str:
         return updated_time_obj.strftime(time_format)[:-3]  # 去掉多余的微秒部分
     except ValueError:
         raise ValueError("时间格式错误，请使用 00:00:00,000 格式的时间字符串")
+
+
+
+def timestamp_convert_to_seconds(timestamp):
+    """
+    将时间戳 (hh:mm:ss,ms) 转换为以秒为单位的浮点数。
+    """
+    hours, minutes, seconds, milliseconds = re.match(r"(\d{2}):(\d{2}):(\d{2}),(\d{3})", timestamp).groups()
+    total_seconds = int(hours) * 3600 + int(minutes) * 60 + int(seconds) + int(milliseconds) * 0.001
+    return total_seconds
+
 
 
 # 统一音频编码和参数
