@@ -86,7 +86,7 @@ def ask_english_teacher_local_llm(question,model_name="llama3.2"):
         return "返回结果中缺少预期字段。"
 
 
-def get_most_hard_word(cn_str,en_str):
+def get_most_hard_words(cn_str,en_str):
     q = f"这行单词中最不常用并且最复杂的单词是哪个,只需要告诉我英文，无需其他信息：{en_str}"
     reply = ask_english_teacher_local_llm(q,model_name="qwen2.5:14b")
     logging.info("提问："+q+"\n回答：\n"+reply+"\n")
@@ -95,12 +95,25 @@ def get_most_hard_word(cn_str,en_str):
         return None
     most_hard_words = re.findall(r'[a-zA-Z]+', reply)
     if most_hard_words is not None and len(most_hard_words) > 0:
-        most_hard_word = most_hard_words[0].lower()
-        return most_hard_word
+        return list(map(lambda word: word.lower(), most_hard_words))
     else:
         print("没有找到最难的单词")
         return None
 
+
+def score_for_sentence(en_str):
+    q = f"给这个英语句子和单词的难度打分，0到10分的范围，只告诉我分数无需其他任何信息：{en_str}"
+    reply = ask_english_teacher_local_llm(q,model_name="qwen2.5:14b")
+    logging.info("提问："+q+"\n回答：\n"+reply+"\n")
+    print("提问："+q+"\n回答：\n"+reply+"\n")
+    pattern = r'\d+'# 正则表达式模式匹配所有数字
+    matches = re.findall(pattern, reply)# 查找所有匹配的部分
+    numbers = [int(match) for match in matches]# 将找到的所有数字字符串转换为整数列表
+    if len(numbers) == 0:
+        print("没有找到数字")
+        return 0
+    else:
+        return numbers[0]
 
 def score_for_word(most_hard_word,en_str):
     q = f"给这个单词的难度打分，0到10分的范围，只告诉我分数无需其他任何信息：{most_hard_word}"
@@ -136,19 +149,52 @@ def score_for_word(most_hard_word,en_str):
 
     return score
 
+
+def explain_words(most_hard_word):
+    replys = []
+    for word in most_hard_word:
+        first_line = word + " "
+        q = f"这个单词：{word}的中文翻译，直接回复翻译结果不要回复其他内容，如果有多个翻译结果用分号隔开"
+        reply = ask_english_teacher_local_llm(q,model_name="qwen2.5:14b")
+        logging.info("提问："+q+"\n回答：\n"+reply+"\n")
+        print("提问："+q+"\n回答：\n"+reply+"\n")
+        first_line += (reply+" ")
+        q = f"这个单词：{word}的音标，直接回复音标结果不要回复其他内容，如果有多个音标结果返回第一个"
+        reply = ask_english_teacher_local_llm(q,model_name="qwen2.5:14b")
+        logging.info("提问："+q+"\n回答：\n"+reply+"\n")
+        print("提问："+q+"\n回答：\n"+reply+"\n")
+        first_line += (reply+" ")
+        replys.append(first_line)
+
+        q = f"这个单词：{word}的造句，要求例句简单，常用,例句的中文翻译重启一行"
+        reply = ask_english_teacher_local_llm(q,model_name="qwen2.5:14b")
+        logging.info("提问："+q+"\n回答：\n"+reply+"\n")
+        print("提问："+q+"\n回答：\n"+reply+"\n")
+        replys.append("例句 "+reply)
+        replys.append("\n")
+    if replys == []:
+        return None
+    return "\n".join(replys)
+
 # 使用本地模型给英语难度评分
-def get_english_difficulty_local_llm(cn_str,en_str):
-    most_hard_word = get_most_hard_word(cn_str,en_str)
-    if most_hard_word is None or most_hard_word == 0:
+def get_english_difficulty_local_llm(most_hard_words,en_str):
+    if most_hard_words is None:
         print(f"没有找到最难的单词 en_str:{en_str}")
         raise RuntimeError(f"没有找到最难的单词 en_str:{en_str}")
-    if most_hard_word in HARD_WORD_SCORE_MAP.keys():
-        logging.info(f"{most_hard_word}已经在HARD_WORD_SCORE_MAP中，直接返回")
-        print(f"{most_hard_word}已经在HARD_WORD_SCORE_MAP中，直接返回")
-        return HARD_WORD_SCORE_MAP[most_hard_word]
-    score = score_for_word(most_hard_word,en_str)
-    HARD_WORD_SCORE_MAP[most_hard_word] = score
-    return score
+    word_scores = {}
+    for most_hard_word in most_hard_words:
+        most_hard_word = most_hard_word.lower()
+        if most_hard_word in HARD_WORD_SCORE_MAP.keys():
+            logging.info(f"{most_hard_word}已经在HARD_WORD_SCORE_MAP中，直接返回")
+            print(f"{most_hard_word}已经在HARD_WORD_SCORE_MAP中，直接返回")
+            word_scores[most_hard_word] = HARD_WORD_SCORE_MAP[most_hard_word]
+        else:
+            score = score_for_word(most_hard_word,en_str)
+            HARD_WORD_SCORE_MAP[most_hard_word] = score
+            word_scores[most_hard_word] = score
+    if len(word_scores) <= 0:
+        return 0
+    return max(word_scores, key=lambda k: word_scores[k])
 
 
 
@@ -229,29 +275,28 @@ def get_hard_words(cn_str,en_str):
         if match:
             phonetic = match.group(0).replace("[","/").replace("]","/")
             
-        # q = f"将“{en_str}”翻译为： “{cn_str}”。“{most_hard_word}”这个单词是直译的吗？回答“是”或“不是”"
-        # result = ask_english_teacher_local_llm(q,model_name="qwen2.5:14b")
-        # logging.info("提问："+q+"\n回答：\n"+result+"\n")
-        # print("提问："+q+"\n回答：\n"+result+"\n")
-        # result = find_yes_or_no(result)
-        # if result is None or len(result) == 0 or result.strip()=="不是":
-        #     r.append((most_hard_word, translation, phonetic, None))
-        #     continue
         
-        q = f"当“{cn_str}”翻译为“{en_str}”其中“{most_hard_word}”这个单词可以被翻译为这中文里的哪个词？只回答词本身，没有翻译就回答“没有”"
-        if QWEN_ASSISTANT is None:
-            raise RuntimeError("QWEN_ASSISTANT 还没有初始化，请先调用 init_ai()")
-        match_cn_txt = QWEN_ASSISTANT.converse(q)
-        logging.info("提问："+q+"\n回答：\n"+match_cn_txt+"\n")
-        print("提问："+q+"\n回答：\n"+match_cn_txt+"\n")
-        if match_cn_txt is None or len(match_cn_txt) == 0 or match_cn_txt.strip()=="没有":
-            r.append((most_hard_word, translation, phonetic, None))
-            HARD_WORD_SET.add((most_hard_word,translation,phonetic,cn_str,en_str))
-            continue
-        if match_cn_txt in cn_str:
-            r.append((most_hard_word, translation, phonetic, match_cn_txt))
-        else:
-            r.append((most_hard_word,translation,phonetic,None))
+        # q = f"当“{cn_str}”翻译为“{en_str}”其中“{most_hard_word}”这个单词可以被翻译为这中文里的哪个词？只回答词本身，没有翻译就回答“没有”"
+        # if QWEN_ASSISTANT is None:
+        #     raise RuntimeError("QWEN_ASSISTANT 还没有初始化，请先调用 init_ai()")
+        # match_cn_txt = QWEN_ASSISTANT.converse(q)
+        # logging.info("提问："+q+"\n回答：\n"+match_cn_txt+"\n")
+        # print("提问："+q+"\n回答：\n"+match_cn_txt+"\n")
+        # if match_cn_txt is None or len(match_cn_txt) == 0 or match_cn_txt.strip()=="没有":
+        #     r.append((most_hard_word, translation, phonetic, None))
+        #     HARD_WORD_SET.add((most_hard_word,translation,phonetic,cn_str,en_str))
+        #     continue
+        # if match_cn_txt in cn_str:
+        #     r.append((most_hard_word, translation, phonetic, match_cn_txt))
+        # else:
+        #     r.append((most_hard_word,translation,phonetic,None))
+
+        # TODO 删除下面3句
+        match_cn_txt = None
+        HARD_WORD_SET.add((most_hard_word,translation,phonetic,cn_str,en_str))
+        r.append((most_hard_word,translation,phonetic,None))
+
+
         HARD_WORD_SET.add((most_hard_word,translation,phonetic, match_cn_txt,cn_str,en_str))
     return r
 # init_ai()

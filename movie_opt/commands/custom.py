@@ -55,7 +55,7 @@ def custom1(args):
                         "--path="+v
                     ]
                     print(f"执行命令: {' '.join(command)}")
-                    subprocess.run(command,check=True)
+                    # subprocess.run(command,check=True)
                 
 
                 if not os.path.exists(ass):
@@ -67,7 +67,7 @@ def custom1(args):
                         "--path="+subdir_path
                     ]
                     print(f"执行命令: {' '.join(command)}")
-                    subprocess.run(command,check=True)
+                    # subprocess.run(command,check=True)
                 
                 
 
@@ -253,7 +253,7 @@ def custom3(args):
                 c,
                 "subtitle", 
                 "reposition_srt", 
-                "--path="+v
+                "--path="+srts
             ]
             print(f"执行命令: {' '.join(command)}")
             subprocess.run(command,check=True)

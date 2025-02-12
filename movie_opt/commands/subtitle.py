@@ -1,18 +1,17 @@
 import os
 import subprocess
 import traceback
-import chardet  # 用于自动检测文件编码
 import re
-from PIL import Image, ImageDraw, ImageFont
 from movie_opt.utils import *
 import shutil
 from datetime import timedelta
-from movie_opt.commands.ai import get_phrase,get_hard_words,ask_english_teacher_local_llm
+from movie_opt.commands.ai import get_phrase,score_for_sentence,get_hard_words,ask_english_teacher_local_llm
 from movie_opt.qwen_utils import QwenPlusAssistant
 import ass
 import srt
 import re
 from datetime import timedelta
+import chardet
 
 def count_srt_statistics(args):
     """
@@ -111,22 +110,24 @@ def change_ass_hard_word_style(args):
             print(f"English: {en_text}")
 
             try:
-                hard_words = get_hard_words(ch_text, en_text)
-                if hard_words is not None and len(hard_words) > 0:
-                    for hard_word in hard_words:
-                        most_hard_word,translation,phonetic,match_cn_txt = hard_word
-                        # 替换match_cn_txt为黄色字体
-                        if match_cn_txt is not None and match_cn_txt in ch_text:
-                            replacement = r'{\\c&H00FFFF00&}'+match_cn_txt+r'{\\r}'
-                            ch_line = re.sub(match_cn_txt, replacement, ch_line, flags=re.IGNORECASE)
+
+                if score_for_sentence(en_text) > 3:
+                    hard_words = get_hard_words(ch_text, en_text)
+                    if hard_words is not None and len(hard_words) > 0:
+                        for hard_word in hard_words:
+                            most_hard_word,translation,phonetic,match_cn_txt = hard_word
+                            # 替换match_cn_txt为黄色字体
+                            if match_cn_txt is not None and match_cn_txt in ch_text:
+                                replacement = r'{\\c&H00FFFF00&}'+match_cn_txt+r'{\\r}'
+                                ch_line = re.sub(match_cn_txt, replacement, ch_line, flags=re.IGNORECASE)
 
 
-                        # 替换most_hard_word为黄色字体并且改字体大小
-                        if re.search(rf'\b{most_hard_word}\b', en_text, re.IGNORECASE):
-                            replacement = r'{\\c&H00FFFF00&\\fs37}'+most_hard_word+r'{\\r}'
-                            en_line = re.sub(most_hard_word, replacement, en_line, flags=re.IGNORECASE)
+                            # 替换most_hard_word为黄色字体并且改字体大小
+                            if re.search(rf'\b{most_hard_word}\b', en_text, re.IGNORECASE):
+                                replacement = r'{\\c&H00FFFF00&\\fs37}'+most_hard_word+r'{\\r}'
+                                en_line = re.sub(most_hard_word, replacement, en_line, flags=re.IGNORECASE)
 
-                    print(f"Chinese: {ch_line} English: {en_line}")
+                        print(f"Chinese: {ch_line} English: {en_line}")
             except Exception as e:
                 print(f"An error occurred: {e}")
                 logging.error(f"查询最难单词出错 ch:{ch_text} en:{en_text} e:{e}")
@@ -155,12 +156,21 @@ def detect_encoding(file_path):
         result = chardet.detect(f.read())
         return result.get("encoding", "utf-8")
 
-def split_text(text):
+
+def split_cn_en_text(text):
     """分离中文和英文"""
-    import re
-    chinese = "".join(re.findall(r"[\u4e00-\u9fff]", text))
-    english = " ".join(re.findall(r"[a-zA-Z0-9,.'!? ]+", text))
-    return chinese.strip(), english.strip()
+    text = text.strip("\n\r")
+    lines = text.split("\n")
+    if len(lines) == 2:
+        if lines[0].strip() == lines[1].strip() and contains_chinese(text) == False:
+            return lines[0].strip(), lines[1].strip()
+    cn,en ="",""
+    for line in lines:
+        if contains_chinese(line):
+            cn += line
+        else:
+            en += line
+    return cn.strip(), en.strip()
 
 def subtitle_srt_to_ass(srt_file, ass_file):
     """将 SRT 文件转换为 ASS 文件"""
@@ -185,7 +195,7 @@ def subtitle_srt_to_ass(srt_file, ass_file):
                 elif "-->" in stripped_line:  # 检测到时间轴
                     buffer.append(stripped_line)  # 时间轴放入缓冲区
                 elif stripped_line:  # 检测到字幕内容
-                    buffer.append(stripped_line)  # 字幕内容放入缓冲区
+                    buffer.append(stripped_line+"\n")  # 字幕内容放入缓冲区
 
             # 处理最后一块字幕
             if buffer:
@@ -200,12 +210,13 @@ def process_buffer(buffer, ass):
         return  # 不完整的字幕块，跳过处理
 
     time_line = buffer[0]
-    text = " ".join(buffer[1:]).replace("\n", " ")  # 合并多行字幕内容为一行
+    text = " ".join(buffer[1:])
+    print(f"text:{text}")
     start, end = time_line.split(" --> ")
     start = format_time(start.strip().replace(",", "."))
     end = format_time(end.strip().replace(",", "."))
     
-    chinese, english = split_text(text)
+    chinese, english = split_cn_en_text(text)
     if chinese:
         ass.write(f"Dialogue: 0,{start},{end},Chinese,,0,0,0,,{chinese}\n")
     if english:
@@ -445,104 +456,6 @@ def srt2txtpng(args):
             # 创建 PNG
             create_png_with_text(txt, output_png_path)
             print(f"处理完成：{output_png_path}")    
-
-from PIL import Image
-
-# 提高 Pillow 允许的最大像素数
-Image.MAX_IMAGE_PIXELS = None
-def create_png_with_text(text, output_path):
-    # 图片的宽度（固定）
-    image_width = 1284
-    
-    # 设置字体和大小
-    font_path = "C:\\Users\\luoruofeng\\AppData\\Local\\Microsoft\\Windows\\Fonts\\AlibabaPuHuiTi-3-75-SemiBold.ttf"  # 根据系统字体路径修改
-    font_size = 44
-    try:
-        font = ImageFont.truetype(font_path, font_size)
-    except OSError:
-        print("找不到字体文件，请修改路径或安装字体。")
-        return
-
-    # 创建一个临时画布
-    dummy_image = Image.new('RGB', (image_width, 1), "white")
-    draw = ImageDraw.Draw(dummy_image)
-
-    # 自动换行处理文本
-    margin = 10
-    line_spacing = 1  # 行间距
-    wrapped_text = wrap_text(text, draw, font, image_width - 2 * margin)
-
-    # 计算文字总高度
-    bbox = draw.multiline_textbbox((0, 0), wrapped_text, font=font, spacing=line_spacing)
-    text_height = bbox[3] - bbox[1]
-    image_height = text_height + 2 * margin
-
-    # 创建实际的图片
-    image = Image.new('RGB', (image_width, image_height), "white")
-    draw = ImageDraw.Draw(image)
-
-    # 绘制文本
-    lines = wrapped_text.split("\n")
-    y = margin
-    for li, line in enumerate(lines):
-        if line.strip() == "":
-            continue
-        x = margin
-        kw_index: list[tuple[int, str]] =  find_keywords_indices(line=line,key_words=colors_ex.keys())
-        for ci, char in enumerate(line):  # 按字符遍历
-            bbox = draw.textbbox((x, y), char, font=font)
-            includ_kw = False
-            if kw_index != None and len(kw_index) > 0:
-                for si,kw in kw_index:
-                    start = si
-                    end = si + len(kw)
-                    if ci >= start and ci < end:
-                        if ci == start:
-                            # 绘制带背景的字符
-                            bg_bbox = draw.textbbox((x, y), kw, font=font)
-                            draw.rectangle(bg_bbox, fill="lightgreen")  # 背景色
-                        draw.text((x, y), char, fill=colors_ex[kw], font=font)
-                        includ_kw = True
-                if not includ_kw:
-                    # 普通字符绘制
-                    draw.text((x, y), char, fill="black", font=font)
-            else:
-                # 普通字符绘制
-                draw.text((x, y), char, fill="black", font=font)
-
-            # 更新 x 坐标
-            char_width = bbox[2] - bbox[0]
-            x += char_width
-
-        # 更新 y 坐标，用于下一行
-        text_height = font.getbbox(line)[3] - font.getbbox(line)[1]
-        y += text_height + line_spacing
-
-
-    # 保存图片
-    image.save(output_path, "PNG")
-    crop_image(image_path=output_path,height=y+5)
-    print(f"PNG 图片已保存: {output_path}")
-
-def wrap_text(text, draw, font, max_width):
-    """根据最大宽度自动换行文本"""
-    lines = []
-    for paragraph in text.split("\n"):
-        current_line = ""
-        for word in paragraph.split():
-            # 测试当前行加上新单词后的宽度
-            test_line = f"{current_line} {word}".strip()
-            bbox = draw.textbbox((0, 0), test_line, font=font)
-            width = bbox[2] - bbox[0]  # 宽度计算
-            if width <= max_width:
-                current_line = test_line
-            else:
-                lines.append(current_line)
-                current_line = word
-        if current_line:
-            lines.append(current_line)
-    return "\n".join(lines)
-
 
 
 

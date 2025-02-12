@@ -3,18 +3,149 @@ import re
 import shutil
 from PIL import Image
 import os
-from tinytag import TinyTag
 from pydub import AudioSegment
 import subprocess
 import shlex
 from datetime import datetime, timedelta
-import cv2
 from pkg_resources import resource_filename
 import logging
-import chardet
 import time
 from functools import wraps
 import re
+from PIL import Image, ImageDraw, ImageFont
+import cv2
+import chardet
+
+# 提高 Pillow 允许的最大像素数
+Image.MAX_IMAGE_PIXELS = None
+
+colors_ex = {"tell": "red", "about": "blue","告诉":"yellow","我的家":"blue"}
+
+
+def wrap_text(text, draw, font, max_width):
+    wrapped_lines = []
+    current_line = ""
+    
+    for char in text:
+        test_line = current_line + char
+        bbox = draw.textbbox((0, 0), test_line, font=font)
+        text_width = bbox[2] - bbox[0]
+        
+        if text_width > max_width:
+            wrapped_lines.append(current_line)
+            current_line = char
+        else:
+            current_line = test_line
+    
+    if current_line:
+        wrapped_lines.append(current_line)
+    
+    return "\n".join(wrapped_lines)
+
+def find_keywords_indices(line: str, key_words: dict) -> list[tuple[int, str, str]]:
+    """
+    在给定的行中找到包含关键词的位置及关键词本身及颜色。
+    
+    :param line: 需要搜索的字符串
+    :param key_words: 关键词字典，键是关键词，值是颜色
+    :return: 包含 (起始下标, 关键词, 颜色) 的列表
+    """
+    results = []
+    for keyword, color in key_words.items():
+        start = 0
+        while (index := line.find(keyword, start)) != -1:  
+            results.append((index, keyword, color))
+            start = index + len(keyword)  # 防止重复匹配
+    return sorted(results, key=lambda x: x[0])  # 按索引排序，确保顺序绘制
+
+def colorize_text(text, key_words):
+    """
+    将文本分割为带颜色标记的部分。
+
+    :param text: 需要处理的文本
+    :param key_words: 关键词字典，键是关键词，值是颜色
+    :return: [(文本片段, 颜色)]，颜色为空字符串时表示默认颜色
+    """
+    indices = find_keywords_indices(text, key_words)
+    result = []
+    last_index = 0
+
+    for index, keyword, color in indices:
+        if last_index < index:
+            result.append((text[last_index:index], ""))  # 默认颜色部分
+        result.append((keyword, color))  # 关键字部分
+        last_index = index + len(keyword)
+
+    if last_index < len(text):
+        result.append((text[last_index:], ""))  # 剩余部分
+    return result
+
+def create_png_with_text(text, output_path, font_size=44, background_alpha=100, image_width=1284,
+                         font_color="black", background_color=(255, 255, 255)):
+    alpha = int(background_alpha * 255 / 100)
+    font_path = "C:\\Users\\luoruofeng\\AppData\\Local\\Microsoft\\Windows\\Fonts\\AlibabaPuHuiTi-3-75-SemiBold.ttf"
+    
+    try:
+        font = ImageFont.truetype(font_path, font_size)
+    except OSError:
+        print("找不到字体文件，请修改路径或安装字体。")
+        return
+    
+    colors_ex = {"最大的爱好是拆汽": "red", "i": "blue", "告诉": "yellow", "我的家": "blue"}
+    
+    bg_rgba = (background_color[0], background_color[1], background_color[2], alpha)
+    dummy_image = Image.new('RGBA', (image_width, 1), bg_rgba)
+    draw = ImageDraw.Draw(dummy_image)
+    
+    margin = 10
+    line_spacing = 5  
+    lines = text.split("\n")  # 逐行处理
+    
+    wrapped_lines = []
+    for line in lines:
+        colorized_segments = colorize_text(line, colors_ex)
+        wrapped_lines.append(colorized_segments)
+
+    image_height = margin  
+    line_infos = []  # 存储每行的绘制信息
+
+    for segments in wrapped_lines:
+        current_line = ""
+        line_segments = []
+        
+        for segment, color in segments:
+            for char in segment:
+                test_line = current_line + char
+                bbox = draw.textbbox((0, 0), test_line, font=font)
+                text_width = bbox[2] - bbox[0]
+
+                if text_width > image_width - 2 * margin:
+                    line_infos.append((line_segments, image_height))
+                    image_height += font_size + line_spacing
+                    current_line = char
+                    line_segments = [(char, color)]
+                else:
+                    current_line = test_line
+                    line_segments.append((char, color))
+
+        if line_segments:
+            line_infos.append((line_segments, image_height))
+            image_height += font_size + line_spacing
+
+    image_height += margin
+    image = Image.new('RGBA', (image_width, image_height), bg_rgba)
+    draw = ImageDraw.Draw(image)
+    
+    for line_segments, y_pos in line_infos:
+        x_pos = margin
+        for char, color in line_segments:
+            draw.text((x_pos, y_pos), char, font=font, fill=color if color else font_color)
+            bbox = draw.textbbox((0, 0), char, font=font)
+            x_pos += bbox[2] - bbox[0]
+
+    image.save(output_path, "PNG")
+    print(f"PNG 图片已保存: {output_path}")
+
 
 
 def remove_non_alphanumeric(text: str) -> str:
@@ -617,6 +748,11 @@ def subtract_one_millisecond(time_str: str) -> str:
 
 
 
+def contains_chinese(text: str) -> bool:
+    """检查字符串是否包含中文字符（\u4e00-\u9fff）"""
+    return bool(re.search(r"[\u4e00-\u9fff]", text))
+
+
 def timestamp_convert_to_seconds(timestamp):
     """
     将时间戳 (hh:mm:ss,ms) 转换为以秒为单位的浮点数。
@@ -906,21 +1042,6 @@ def crop_image(image_path, width=None, height=None):
         cropped_img.save(image_path)
 
 
-def find_keywords_indices(line: str, key_words: list[str]) -> list[tuple[int, str]]:
-    """
-    在给定的行中找到包含关键词的位置及关键词本身。
-    
-    :param line: 需要搜索的字符串
-    :param key_words: 关键词列表
-    :return: 包含下标和关键词的列表
-    """
-    results = []
-    for keyword in key_words:
-        start = 0
-        while (index := line.find(keyword, start)) != -1:  # 使用 `str.find` 找到关键词的位置
-            results.append((index, keyword))
-            start = index + 1  # 更新开始位置，避免重复查找
-    return results
 
 def assign_colors(lists, color_palette=None):
     """

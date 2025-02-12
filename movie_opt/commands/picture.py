@@ -5,14 +5,13 @@ import traceback
 from pkg_resources import resource_filename
 import subprocess
 import sys
-import cv2
 import re
 from movie_opt.utils import *
 from movie_opt.commands.subtitle import count_srt_statistics
 import logging
 import os
 from PIL import Image, ImageDraw, ImageFont
-from movie_opt.commands.ai import get_english_difficulty_local_llm, init_ai
+from movie_opt.commands.ai import score_for_sentence,explain_words,get_english_difficulty_local_llm,get_most_hard_words, init_ai,HARD_WORD_SCORE_MAP
 
 def add_titles_to_images(video_path, folder_path):
     font_path = os.path.join(os.path.dirname(__file__), 'static', "SourceHanSerif-Bold.otf")
@@ -388,7 +387,7 @@ def split_complete_video(split_endtime_json_list,video_name,video_extension,vide
             
             st = subtract_one_millisecond(end_time)
 
-def split_different_video(split_endtime_json_list,video_name,video_extension,video,screenshots_dir,video_child_dir,video_cn_dir,video_clips_dir,video_clips_dir2,video_empty_dir,filter_count,filter_score):
+def split_different_video(split_endtime_json_list,video_name,video_extension,video,explain_dir,screenshots_dir,video_child_dir,video_cn_dir,video_clips_dir,video_clips_dir2,video_empty_dir,filter_count,filter_score):
     # 创建各种视频
     id_counter = 0
     for info in split_endtime_json_list:
@@ -397,24 +396,41 @@ def split_different_video(split_endtime_json_list,video_name,video_extension,vid
         end_time = info["et"]
         cn_content = info["cn"]
         en_content = info["en"]
+
+        need_explain_words = None
         
-        # 若改行字幕少于filter_count个字符不生成跟读视频
-        if len(en_content) < filter_count:
-            logging.info(f"英文字幕少于{filter_count}个字符不生成跟读视频 {en_content} id:{id_counter}")
+        set_words = set(en_content.split(" "))
+        set_word_count = ''.join(str(item) for item in set_words)
+
+        # 若该行字幕少于filter_count个字符不生成跟读视频
+        if set_word_count < filter_count:
+            logging.info(f"英文字幕数少于{filter_count}个字符不生成跟读视频 {en_content} id:{id_counter}")
             continue
         
-        # 如果字数大于33个 则生成跟读视频 小于33 则判断最难的单词分数是否低于filter_score分
-        if len(en_content) < 33:
-            # 最难的单词分数低于filter_score分不生成跟读视频
-            try:
-                score = get_english_difficulty_local_llm(cn_content,en_content)
+        # 最难的单词分数低于filter_score分不生成跟读视频
+        try:
+            sentence_score = score_for_sentence(en_content)
+            if sentence_score > 3:
+                most_hard_words = get_most_hard_words(cn_content,en_content)
+                score = get_english_difficulty_local_llm(most_hard_words,en_content)
                 if score < filter_score:
                     logging.info(f"最难的单词分数低于{filter_score}分不生成跟读视频 {en_content} id:{id_counter}")
                     continue
-            except Exception as e:
-                logging.error(f"本地模型单词评分发送异常",exc_info=True)
-                traceback.print_exc()
+                need_explain_words = most_hard_words
+            else:
+                logging.info(f"句子难度的分数低于3分不生成跟读视频 {en_content} id:{id_counter}")
                 continue
+        except Exception as e:
+            logging.error(f"本地模型单词评分发送异常",exc_info=True)
+            traceback.print_exc()
+            continue
+
+        if need_explain_words is not None:
+            explain= explain_words(need_explain_words)
+            if explain != None:
+                explain_name = f"{video_name}-{id_counter}.png"
+                explain_path = os.path.join(explain_dir, explain_name)
+                create_png_with_text(explain,explain_path,background_alpha=70)
             
         screenshot_name = f"{video_name}-{id_counter}.jpg"
         screenshot_path = os.path.join(screenshots_dir, screenshot_name)
@@ -475,24 +491,6 @@ def split_different_video(split_endtime_json_list,video_name,video_extension,vid
         print(f"File saved to: {content_voice}")
 
 
-
-        # #youdao翻译生成mp3
-        # content_voice = os.path.join(os.path.dirname(video),"temp.mp3")
-        # voice_command = [
-        #     sys.argv[0],  # This is the key change: use sys.argv[0]
-        #     "voice",
-        #     "youdao_voice",
-        #     "--content=" + content,
-        #     "--save_path=" + content_voice,
-        #     "--type=1"
-        # ]
-
-        # print("Executing command:", " ".join(voice_command))
-        # result = subprocess.run(voice_command, capture_output=True, text=True, check=True)
-        # print("Stdout:", result.stdout)
-        # print("Stderr:", result.stderr)
-        # print(f"File saved to: {content_voice}")
-
         #edge-tts生成美国英语男发音mp3
         content_voice2 = os.path.join(os.path.dirname(video),"temp2.mp3")
         voice_command = [
@@ -509,27 +507,6 @@ def split_different_video(split_endtime_json_list,video_name,video_extension,vid
         print("Stdout:", result.stdout)
         print("Stderr:", result.stderr)
         print(f"File saved to: {content_voice2}")
-
-        # #youdao翻译生成mp3（美音）
-        # content_voice2 = os.path.join(os.path.dirname(video),"temp2.mp3")
-        # voice_command2 = [
-        #     sys.argv[0],  # This is the key change: use sys.argv[0]
-        #     "voice",
-        #     "youdao_voice",
-        #     "--content=" + content,
-        #     "--save_path=" + content_voice2,
-        #     "--type=2"
-        # ]
-
-        # print("Executing command:", " ".join(voice_command2))
-
-        # # Use subprocess.run for cleaner handling of output and errors (Python 3.5+).
-        # result2 = subprocess.run(voice_command2, capture_output=True, text=True, check=True)
-
-        # # Print the output (stdout and stderr) for debugging or logging.
-        # print("Stdout:", result2.stdout)
-        # print("Stderr:", result2.stderr)
-        # print(f"File saved to: {content_voice2}")
 
         #拼接音频“1s空白”和“中文内容”
         cn_voice_duration = 0
@@ -627,9 +604,10 @@ def split_different_video(split_endtime_json_list,video_name,video_extension,vid
         subprocess.run(command)
 
         print(f"生成视频片段: {child_path}")
-        #添加 “宝宝慢速” 到视频
-        add_text_to_video(child_path,"宝宝慢速")
-        logging.info(f"创建行视频-宝宝慢速 {child_path} {' '.join(command)}")
+        # #添加大字体 “宝宝慢速” 到视频
+        # add_text_to_video(child_path,"宝宝慢速")
+        # logging.info(f"创建行视频-宝宝慢速 {child_path} {' '.join(command)}")
+        
 
         #创建每行中文视频
         cn_name = f"{video_name}-{id_counter}{video_extension}"
@@ -865,6 +843,11 @@ def split_video(args):
         os.makedirs(screenshots_dir, exist_ok=True)
         logging.info(f"创建文件夹:{screenshots_dir}")
 
+        explain_dir = os.path.join(os.path.dirname(video), "每行解释图-"+video_name)
+        os.makedirs(explain_dir, exist_ok=True)
+        logging.info(f"创建文件夹:{explain_dir}")
+        
+
         video_clips_dir = os.path.join(os.path.dirname(video), "每行发音视频-"+video_name)
         os.makedirs(video_clips_dir, exist_ok=True)
         logging.info(f"创建文件夹:{video_clips_dir}")
@@ -904,7 +887,7 @@ def split_video(args):
         split_complete_video(split_endtime_json_list,video_name,video_extension,video_split_complete_dir,video)
 
         # 按照行字幕-分段原视频-不同视频(上一行字幕的结束到这一行字幕的开始)
-        split_different_video(split_endtime_json_list,video_name,video_extension,video,screenshots_dir,video_child_dir,video_cn_dir,video_clips_dir,video_clips_dir2,video_empty_dir,13,3)
+        split_different_video(split_endtime_json_list,video_name,video_extension,video,explain_dir,screenshots_dir,video_child_dir,video_cn_dir,video_clips_dir,video_clips_dir2,video_empty_dir,13,3)
         
 
 # 删除文件前检查是否存在
