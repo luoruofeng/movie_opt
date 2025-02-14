@@ -11,7 +11,7 @@ from movie_opt.commands.subtitle import count_srt_statistics
 import logging
 import os
 from PIL import Image, ImageDraw, ImageFont
-from movie_opt.commands.ai import score_for_sentence,explain_words,get_english_difficulty_local_llm,get_most_hard_words, init_ai,HARD_WORD_SCORE_MAP
+from movie_opt.commands.ai import get_hard_word_scores,explain_words, init_ai,HARD_WORD_SCORE_MAP
 
 def add_titles_to_images(video_path, folder_path):
     font_path = os.path.join(os.path.dirname(__file__), 'static', "SourceHanSerif-Bold.otf")
@@ -396,41 +396,43 @@ def split_different_video(split_endtime_json_list,video_name,video_extension,vid
         end_time = info["et"]
         cn_content = info["cn"]
         en_content = info["en"]
-
-        need_explain_words = None
         
         set_words = set(en_content.split(" "))
-        set_word_count = ''.join(str(item) for item in set_words)
+        set_word_count = len(''.join(str(item) for item in set_words))
 
         # 若该行字幕少于filter_count个字符不生成跟读视频
         if set_word_count < filter_count:
             logging.info(f"英文字幕数少于{filter_count}个字符不生成跟读视频 {en_content} id:{id_counter}")
             continue
         
-        # 最难的单词分数低于filter_score分不生成跟读视频
         try:
-            sentence_score = score_for_sentence(en_content)
-            if sentence_score > 3:
-                most_hard_words = get_most_hard_words(cn_content,en_content)
-                score = get_english_difficulty_local_llm(most_hard_words,en_content)
-                if score < filter_score:
-                    logging.info(f"最难的单词分数低于{filter_score}分不生成跟读视频 {en_content} id:{id_counter}")
-                    continue
-                need_explain_words = most_hard_words
+            # 句子和最难的单词分数低于filter_score分不生成跟读视频
+            most_hard_words = get_hard_word_scores(cn_content,en_content,filter_score)
+            # 解释每个有难度的单词
+            if most_hard_words is not None:
+                logging.info(f"解释单词 {most_hard_words} id:{id_counter}")
+                explain,en_cn_translations= explain_words(most_hard_words)
+                if explain != None:
+                    explain_name = f"{video_name}-{id_counter}.png"
+                    explain_path = os.path.join(explain_dir, explain_name)
+                    logging.info(f"生成解释图片：{explain_path} 解释单词的内容：{explain}")
+                    colors_exs = None
+                    if en_cn_translations is not None and len(en_cn_translations.items())>0:
+                        colors_exs = {}
+                        colors_exs["例句："] = "green"
+                        for en,cn in en_cn_translations.items():
+                            colors_exs[en] = "blue"
+                            colors_exs[cn] = "red"
+                    logging.info(f"解释单词作色：{colors_exs} id:{id_counter} en_content:{en_content}")
+                    create_png_with_text(explain,explain_path,background_alpha=80,font_size=38,colors_ex=colors_exs)    
+                    logging.info(f"PNG 图片已保存: {explain_path} colors_ex={colors_exs}")
             else:
-                logging.info(f"句子难度的分数低于3分不生成跟读视频 {en_content} id:{id_counter}")
-                continue
+                logging.info(f"没有需要解释的单词 {en_content} id:{id_counter}")
         except Exception as e:
             logging.error(f"本地模型单词评分发送异常",exc_info=True)
             traceback.print_exc()
             continue
 
-        if need_explain_words is not None:
-            explain= explain_words(need_explain_words)
-            if explain != None:
-                explain_name = f"{video_name}-{id_counter}.png"
-                explain_path = os.path.join(explain_dir, explain_name)
-                create_png_with_text(explain,explain_path,background_alpha=70)
             
         screenshot_name = f"{video_name}-{id_counter}.jpg"
         screenshot_path = os.path.join(screenshots_dir, screenshot_name)
@@ -583,6 +585,12 @@ def split_different_video(split_endtime_json_list,video_name,video_extension,vid
 
         print(f"生成截图: {screenshot_path}")
 
+        # 带有有解释图片的截图
+        if os.path.exists(explain_path) and os.path.exists(screenshot_path):
+            logging.info(f"通过解释图片和截图生成带有有解释图片的截图: {explain_path}")
+            print(f"通过解释图片和截图生成带有有解释图片的截图: {explain_path} {screenshot_path}")
+            overlay_image(screenshot_path,explain_path)
+
 
         #创建每行儿童发音视频
         child_name = f"{video_name}-{id_counter}{video_extension}"
@@ -628,9 +636,9 @@ def split_different_video(split_endtime_json_list,video_name,video_extension,vid
         logging.info(f"创建每行中文视频: cn_path:{cn_path} command:{' '.join(command)}")
         subprocess.run(command)
         print(f"生成视频片段: {cn_path}")
-        #添加 “中文” 到视频
-        add_text_to_video(cn_path,"中文")
-        logging.info(f"创建行视频-中文 {cn_path} {' '.join(command)}")
+        # #添加 “中文” 到视频
+        # add_text_to_video(cn_path,"中文")
+        # logging.info(f"创建行视频-中文 {cn_path} {' '.join(command)}")
 
 
 
@@ -653,9 +661,9 @@ def split_different_video(split_endtime_json_list,video_name,video_extension,vid
         logging.info(f"创建每行发音视频: clip_path:{clip_path} command:{' '.join(command)}")
         subprocess.run(command)
         print(f"生成视频片段: {clip_path}")
-        #添加 “美音慢速” 到视频
-        add_text_to_video(clip_path,"英音慢速")
-        logging.info(f"创建行视频-英音慢速 {clip_path} {' '.join(command)}")
+        # #添加 “美音慢速” 到视频
+        # add_text_to_video(clip_path,"英音慢速")
+        # logging.info(f"创建行视频-英音慢速 {clip_path} {' '.join(command)}")
 
 
         #创建每行发音视频2
@@ -678,9 +686,9 @@ def split_different_video(split_endtime_json_list,video_name,video_extension,vid
         subprocess.run(command)
 
         print(f"生成视频片段: {clip_path2}")
-        #添加 “美音慢速” 到视频
-        add_text_to_video(clip_path2,"美音慢速")
-        logging.info(f"创建行视频-美音慢速 {clip_path2} {' '.join(command)}")
+        # #添加 “美音慢速” 到视频
+        # add_text_to_video(clip_path2,"美音慢速")
+        # logging.info(f"创建行视频-美音慢速 {clip_path2} {' '.join(command)}")
         
         
 
@@ -732,9 +740,9 @@ def split_different_video(split_endtime_json_list,video_name,video_extension,vid
         print(f"创建跟读视频: empty_path:{empty_path} command:{' '.join(command)}")
         subprocess.run(command)
         print(f"生成视频 {empty_path}")
-        #添加 “跟读” 到视频
-        add_text_to_video(empty_path,"跟读")
-        logging.info(f"创建行视频-跟读 {empty_path} {' '.join(command)}")
+        # #添加 “跟读” 到视频
+        # add_text_to_video(empty_path,"跟读")
+        # logging.info(f"创建行视频-跟读 {empty_path} {' '.join(command)}")
 
         #删除句子朗读
         safe_remove(content_voice, "生成视频片段")
@@ -878,17 +886,27 @@ def split_video(args):
 
         video_name, _ = os.path.splitext(os.path.basename(video))
 
-        init_ai() # 初始化ai
 
-        # 按照行字幕-分段原视频
-        split_fragment_video(split_endtime_json_list,video_name,video_extension,video_split_dir,video)
-
-        # 按照行字幕-分段原视频-完整视频(上一行字幕的结束到这一行字幕的开始)
-        split_complete_video(split_endtime_json_list,video_name,video_extension,video_split_complete_dir,video)
-
-        # 按照行字幕-分段原视频-不同视频(上一行字幕的结束到这一行字幕的开始)
-        split_different_video(split_endtime_json_list,video_name,video_extension,video,explain_dir,screenshots_dir,video_child_dir,video_cn_dir,video_clips_dir,video_clips_dir2,video_empty_dir,13,3)
         
+        try:
+            init_ai() # 初始化ai
+        except Exception as e:
+            logging.error(f"init_ai异常",exc_info=True)
+            traceback.print_exc()
+
+        try:
+
+            # 按照行字幕-分段原视频
+            split_fragment_video(split_endtime_json_list,video_name,video_extension,video_split_dir,video)
+
+            # 按照行字幕-分段原视频-完整视频(上一行字幕的结束到这一行字幕的开始)
+            split_complete_video(split_endtime_json_list,video_name,video_extension,video_split_complete_dir,video)
+
+            # 按照行字幕-分段原视频-不同视频(上一行字幕的结束到这一行字幕的开始)
+            split_different_video(split_endtime_json_list,video_name,video_extension,video,explain_dir,screenshots_dir,video_child_dir,video_cn_dir,video_clips_dir,video_clips_dir2,video_empty_dir,8,2)
+        except Exception as e:
+            logging.error(f"split_video异常",exc_info=True)
+            traceback.print_exc()
 
 # 删除文件前检查是否存在
 def safe_remove(file_path, description):

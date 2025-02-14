@@ -5,11 +5,10 @@ import re
 from movie_opt.utils import *
 import shutil
 from datetime import timedelta
-from movie_opt.commands.ai import get_phrase,score_for_sentence,get_hard_words,ask_english_teacher_local_llm
+from movie_opt.commands.ai import score_for_sentence,get_hard_word_scores,ask_english_teacher_local_llm
 from movie_opt.qwen_utils import QwenPlusAssistant
 import ass
 import srt
-import re
 from datetime import timedelta
 import chardet
 
@@ -110,29 +109,19 @@ def change_ass_hard_word_style(args):
             print(f"English: {en_text}")
 
             try:
-
-                if score_for_sentence(en_text) > 3:
-                    hard_words = get_hard_words(ch_text, en_text)
-                    if hard_words is not None and len(hard_words) > 0:
-                        for hard_word in hard_words:
-                            most_hard_word,translation,phonetic,match_cn_txt = hard_word
-                            # 替换match_cn_txt为黄色字体
-                            if match_cn_txt is not None and match_cn_txt in ch_text:
-                                replacement = r'{\\c&H00FFFF00&}'+match_cn_txt+r'{\\r}'
-                                ch_line = re.sub(match_cn_txt, replacement, ch_line, flags=re.IGNORECASE)
-
-
-                            # 替换most_hard_word为黄色字体并且改字体大小
-                            if re.search(rf'\b{most_hard_word}\b', en_text, re.IGNORECASE):
-                                replacement = r'{\\c&H00FFFF00&\\fs37}'+most_hard_word+r'{\\r}'
-                                en_line = re.sub(most_hard_word, replacement, en_line, flags=re.IGNORECASE)
-
-                        print(f"Chinese: {ch_line} English: {en_line}")
+                most_hard_word_score = get_hard_word_scores(ch_text,en_text)
+                if most_hard_word_score is not None and len(most_hard_word_score) > 0:
+                    for word, score in most_hard_word_score:
+                        if word in en_text:
+                            if re.search(rf'\b{word}\b', en_text, re.IGNORECASE):
+                                replacement = r'{\\c&H00FFFF00&\\fs37}'+word+r'{\\r}'
+                                en_line = re.sub(word, replacement, en_line, flags=re.IGNORECASE)
+                    print(f"change_ass_hard_word_style-转化中文: {ch_line} 转化英文: {en_line}")
+                    logging.info(f"change_ass_hard_word_style-转化中文: {ch_line} 转化英文: {en_line}")
             except Exception as e:
                 print(f"An error occurred: {e}")
-                logging.error(f"查询最难单词出错 ch:{ch_text} en:{en_text} e:{e}")
+                logging.error(f"change_ass_hard_word_style-出错 ch:{ch_text} en:{en_text} e:{e}")
                 traceback.print_exc()
-                print(f"查询最难单词出错 ch:{ch_text} en:{en_text} e:{e}")
 
                 
             modified_dialogues.append(ch_line)
@@ -211,7 +200,6 @@ def process_buffer(buffer, ass):
 
     time_line = buffer[0]
     text = " ".join(buffer[1:])
-    print(f"text:{text}")
     start, end = time_line.split(" --> ")
     start = format_time(start.strip().replace(",", "."))
     end = format_time(end.strip().replace(",", "."))

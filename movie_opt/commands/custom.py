@@ -46,16 +46,16 @@ def custom1(args):
                 print(f"正在处理子文件夹: {subdir_path}")
                 c = sys.argv[0]
                 
-                if not os.path.exists(os.path.join(subdir_path,"picture")):
-                    print("创建封面")
-                    command = [
-                        c,
-                        "picture", 
-                        "generate_images", 
-                        "--path="+v
-                    ]
-                    print(f"执行命令: {' '.join(command)}")
-                    # subprocess.run(command,check=True)
+                # if not os.path.exists(os.path.join(subdir_path,"picture")):
+                #     print("创建封面")
+                #     command = [
+                #         c,
+                #         "picture", 
+                #         "generate_images", 
+                #         "--path="+v
+                #     ]
+                #     print(f"执行命令: {' '.join(command)}")
+                #     subprocess.run(command,check=True)
                 
 
                 if not os.path.exists(ass):
@@ -67,7 +67,7 @@ def custom1(args):
                         "--path="+subdir_path
                     ]
                     print(f"执行命令: {' '.join(command)}")
-                    # subprocess.run(command,check=True)
+                    subprocess.run(command,check=True)
                 
                 
 
@@ -79,7 +79,7 @@ def custom1(args):
                     "--path="+ass
                 ]
                 print(f"执行命令: {' '.join(command)}")
-                # subprocess.run(command,check=True)
+                subprocess.run(command,check=True)
 
                 print("给视频添加ass字幕")
                 command = [
@@ -89,7 +89,7 @@ def custom1(args):
                     "--path="+subdir_path
                 ]
                 print(f"执行命令: {' '.join(command)}")
-                # subprocess.run(command,check=True)
+                subprocess.run(command,check=True)
 
                 # 如果视频文件名不是以subtitle_开头，则将视频文件名改为subtitle_+视频文件名
                 v_basename = os.path.basename(v)

@@ -15,12 +15,57 @@ import re
 from PIL import Image, ImageDraw, ImageFont
 import cv2
 import chardet
+from tinytag import TinyTag
+
+from PIL import Image
+
+def add_indent_to_str(text: str) -> str:
+    return "\n".join("    " + line for line in text.splitlines())
+
+def overlay_image(background_path, overlay_path, output_path=None):
+    """
+    将 overlay_path 指定的图片覆盖到 background_path 指定的背景图片上，
+    要求：
+      - 覆盖图片大小调整为背景图片宽度的75%（等比例缩放）；
+      - 覆盖图片放置在背景图片顶部，从背景图片顶部开始10px处；
+      - 水平居中对齐。
+    如果未提供 output_path，则直接覆盖原背景图片。
+    """
+    # 打开背景图片并转换为RGBA模式（支持透明度）
+    bg = Image.open(background_path).convert("RGBA")
+    # 打开覆盖图片并转换为RGBA模式
+    overlay = Image.open(overlay_path).convert("RGBA")
+    
+    bg_width, bg_height = bg.size
+    
+    # 计算覆盖图片的新宽度（70%背景宽度）以及等比例缩放后的高度
+    new_overlay_width = int(bg_width * 0.70)
+    scale_ratio = new_overlay_width / overlay.width
+    new_overlay_height = int(overlay.height * scale_ratio)
+    
+    # 调整覆盖图片大小
+    overlay_resized = overlay.resize((new_overlay_width, new_overlay_height), Image.LANCZOS)
+    
+    # 计算覆盖图片的放置位置：左右居中，距离背景顶部10px
+    x = (bg_width - new_overlay_width) // 2
+    y = 10
+    
+    # 将覆盖图片粘贴到背景图片上，使用覆盖图片自身的 alpha 作为蒙版
+    bg.paste(overlay_resized, (x, y), overlay_resized)
+    
+    # 如果没有提供输出路径，则覆盖原背景图片
+    if output_path is None:
+        output_path = background_path
+    
+    if output_path.lower().endswith(('.jpg', '.jpeg')):
+        bg = bg.convert("RGB")
+    
+    bg.save(output_path)
+
+
 
 # 提高 Pillow 允许的最大像素数
 Image.MAX_IMAGE_PIXELS = None
-
-colors_ex = {"tell": "red", "about": "blue","告诉":"yellow","我的家":"blue"}
-
 
 def wrap_text(text, draw, font, max_width):
     wrapped_lines = []
@@ -81,17 +126,14 @@ def colorize_text(text, key_words):
     return result
 
 def create_png_with_text(text, output_path, font_size=44, background_alpha=100, image_width=1284,
-                         font_color="black", background_color=(255, 255, 255)):
+                         font_color="black", background_color=(255, 255, 255),colors_ex=None):
     alpha = int(background_alpha * 255 / 100)
-    font_path = "C:\\Users\\luoruofeng\\AppData\\Local\\Microsoft\\Windows\\Fonts\\AlibabaPuHuiTi-3-75-SemiBold.ttf"
-    
+    font_path = os.path.join(os.path.dirname(resource_filename(__name__,".")),'commands/static', "AlibabaPuHuiTi-3-75-SemiBold.ttf")
+    font = None
     try:
         font = ImageFont.truetype(font_path, font_size)
     except OSError:
-        print("找不到字体文件，请修改路径或安装字体。")
-        return
-    
-    colors_ex = {"最大的爱好是拆汽": "red", "i": "blue", "告诉": "yellow", "我的家": "blue"}
+        raise ValueError(f"找不到字体文件，请修改路径或安装字体。{font_path}")
     
     bg_rgba = (background_color[0], background_color[1], background_color[2], alpha)
     dummy_image = Image.new('RGBA', (image_width, 1), bg_rgba)
@@ -103,7 +145,10 @@ def create_png_with_text(text, output_path, font_size=44, background_alpha=100, 
     
     wrapped_lines = []
     for line in lines:
-        colorized_segments = colorize_text(line, colors_ex)
+        if colors_ex is None:
+            colorized_segments = [(line, "")]
+        else:
+            colorized_segments = colorize_text(line, colors_ex)
         wrapped_lines.append(colorized_segments)
 
     image_height = margin  
@@ -1015,9 +1060,9 @@ def get_mp3_duration_tinytag(file_path):
         duration = audio.duration
         return duration
     except FileNotFoundError:
-        return f"文件 '{file_path}' 未找到"
+        raise ValueError(f"文件 '{file_path}' 未找到")
     except Exception as e:
-        return f"发生错误：{e}"
+        raise ValueError(f"发生错误：{e}")
 
 def crop_image(image_path, width=None, height=None):
     # 打开图片
