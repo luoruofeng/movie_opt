@@ -73,11 +73,6 @@ movie_opt.exe subtitle srt2txtpng --path="C:\Users\luoruofeng\Desktop\test"
 ```
 
 
-##
-```
-movie_opt.exe ai get_hard_words_and_set_color --path="C:\Users\luoruofeng\Desktop\test2\test.srt"
-```
-
 
 ## 从数据库查询英文单词
 ```
@@ -156,7 +151,7 @@ movie_opt.exe merge merge3  --path="C:\Users\luoruofeng\Desktop\test\视频片�
 
 # 操作多个包含了有双语srt和视频的动画片的文件夹
 ```
-movie_opt.exe custom custom1  --path="C:\Users\luoruofeng\Desktop\test2"  --segment_second=8
+movie_opt.exe custom custom1  --path="C:\Users\luoruofeng\Desktop\test9"  --segment_second=28
 ```
 
 

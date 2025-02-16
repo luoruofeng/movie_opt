@@ -2,7 +2,7 @@ import os
 from dashscope import Generation
 
 class QwenPlusAssistant:
-    def __init__(self, api_key=None, model='qwen-plus', result_format="message"):
+    def __init__(self, api_key=None, model='qwen-max', result_format="message"):
         """
         初始化QwenPlusAssistant实例。
         

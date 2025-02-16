@@ -2,12 +2,12 @@ from pathlib import Path
 from pypdf import PdfReader
 from pathlib import Path
 import re
-from movie_opt.commands.voice import edge_tts_voice
 from movie_opt.utils import *
 import os
 import argparse
 import subprocess
 import shutil
+from movie_opt.commands.voice import VoiceOperater
 
 # 替换一些符号为逗号，为了edge_tts可以朗读的时候断句
 def replace_punctuation(input_file_path):
@@ -143,10 +143,11 @@ def split_sentences_2voice(args):
         os.makedirs(temp_dir, exist_ok=True)
 
         # 保存分句的音频文件
+        voiceOperater = VoiceOperater(None)
         for i, sentence in enumerate(sentences):
             args.save_path = os.path.join(temp_dir, f"temp_{i}.mp3")
             args.content = sentence.replace("\n","").replace(" ","")
-            edge_tts_voice(args)
+            voiceOperater.edge_tts_voice(args)
 
         output_mp3 = os.path.join(os.path.dirname(txt_path) ,f"{filename}.mp3")
         concat_file = f"{temp_dir}/file_list.txt"

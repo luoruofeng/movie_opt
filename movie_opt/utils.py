@@ -1,7 +1,5 @@
 import json
-import re
 import shutil
-from PIL import Image
 import os
 from pydub import AudioSegment
 import subprocess
@@ -17,10 +15,81 @@ import cv2
 import chardet
 from tinytag import TinyTag
 
-from PIL import Image
-
 def add_indent_to_str(text: str) -> str:
     return "\n".join("    " + line for line in text.splitlines())
+
+
+# 删除文件前检查是否存在
+def safe_remove(file_path, description):
+    if os.path.exists(file_path):
+        os.remove(file_path)
+        print(f"{description}: {file_path}")
+    else:
+        print(f"{description} 文件不存在，跳过删除: {file_path}")
+
+
+def is_portrait_video(width, height, aspect_ratio=(9, 16)):
+    """判断视频是否是竖屏，默认判断9:16竖屏"""
+    return height * aspect_ratio[0] == width * aspect_ratio[1]
+
+
+def detect_encoding(file_path):
+    """检测文件的编码"""
+    with open(file_path, "rb") as f:
+        result = chardet.detect(f.read())
+        return result.get("encoding", "utf-8")
+
+def compute_srt_statistics(srt_file_path):
+    """
+    统计 SRT 文件的字幕行数和唯一英文单词的数量。
+
+    :param srt_file_path: 字幕文件的路径
+    :return: 一个元组 (字幕行数, 唯一英文单词数量)
+    """
+    subtitle_line_count = 0
+    unique_words = set()
+    if not os.path.exists(srt_file_path):
+        logging.info(f"统计英文单词的数量失败,没有srt文件:{srt_file_path}")
+        return 0, 0
+    try:
+        with open(srt_file_path, 'r', encoding='utf-8') as file:
+            lines = file.readlines()
+
+        for line in lines:
+            # 去掉时间戳、序号等非字幕内容
+            if re.match(r'^\d+$', line.strip()) or re.match(r'-->+', line.strip()):
+                continue
+
+            # 非空行即为字幕内容
+            stripped_line = line.strip()
+            if stripped_line:
+                subtitle_line_count += 1
+
+                # 提取字幕中的英文单词（不区分大小写）
+                words = re.findall(r'[a-zA-Z]+', stripped_line)
+                unique_words.update(word.lower() for word in words)
+
+        return subtitle_line_count, len(unique_words)
+
+    except FileNotFoundError:
+        print(f"File not found: {srt_file_path}")
+        return 0, 0
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return 0, 0
+
+
+
+def parse_timestamp_to_s(timestamp):
+    """ 将 SRT 时间戳解析为秒和毫秒 """
+    # 使用正则表达式分割时间戳，匹配到可能有小时、分钟、秒和毫秒的格式
+    match = re.match(r"(\d+):(\d+):(\d+),(\d+)", timestamp)
+    if not match:
+        raise ValueError("Invalid SRT timestamp format")
+    
+    hours, minutes, seconds, milliseconds = map(int, match.groups())
+    total_seconds = hours * 3600 + minutes * 60 + seconds
+    return total_seconds, milliseconds
 
 def overlay_image(background_path, overlay_path, output_path=None):
     """
@@ -38,8 +107,8 @@ def overlay_image(background_path, overlay_path, output_path=None):
     
     bg_width, bg_height = bg.size
     
-    # 计算覆盖图片的新宽度（70%背景宽度）以及等比例缩放后的高度
-    new_overlay_width = int(bg_width * 0.70)
+    # 计算覆盖图片的新宽度（75%背景宽度）以及等比例缩放后的高度
+    new_overlay_width = int(bg_width * 0.75)
     scale_ratio = new_overlay_width / overlay.width
     new_overlay_height = int(overlay.height * scale_ratio)
     
