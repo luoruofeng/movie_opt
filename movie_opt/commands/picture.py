@@ -239,9 +239,7 @@ def add_info_text_to_images(video_path, folder_path, srt_path):
     font = ImageFont.truetype(str(font_path), font_size)
 
     video_duration = convert_seconds(get_mp4_duration_cv2(video_path))
-    arg_parser = argparse.ArgumentParser()
-    arg_parser.path = srt_path
-    linecount,wordcount= compute_srt_statistics(arg_parser)
+    linecount,wordcount= compute_srt_statistics(srt_path)
 
     # 要添加的文字内容
     text_lines = [
@@ -559,7 +557,7 @@ class PictureOperater:
                 split_complete_video(split_endtime_json_list,video_name,video_extension,video_split_complete_dir,video)
 
                 # 按照行字幕-分段原视频-不同视频(上一行字幕的结束到这一行字幕的开始)
-                self.split_different_video(split_endtime_json_list,video_name,video_extension,video,explain_dir,screenshots_dir,video_child_dir,video_cn_dir,video_clips_dir,video_clips_dir2,video_empty_dir,5,1)
+                self.split_different_video(split_endtime_json_list,video_name,video_extension,video,explain_dir,screenshots_dir,video_child_dir,video_cn_dir,video_clips_dir,video_clips_dir2,video_empty_dir,15,1)
             except Exception as e:
                 logging.error(f"split_video异常",exc_info=True)
                 traceback.print_exc()

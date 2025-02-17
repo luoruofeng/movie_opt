@@ -148,7 +148,7 @@ class LaunageAI:
                 return sentence_score
         sentence_score = 0
         try:
-            q = f"给这个英语句子和单词的难度打分，0到10分的范围，只告诉我分数无需其他任何信息：{en_content}"
+            q = f"给这个英语句子的难度打分，0到10分的范围，只告诉我分数无需其他任何信息：{en_content}"
             reply = self.ask_english_teacher_local_llm(q,model_name="qwen2.5:14b")
             logging.info("提问："+q+"\n回答：\n"+reply+"\n")
             print("提问："+q+"\n回答：\n"+reply+"\n")
@@ -255,7 +255,7 @@ class LaunageAI:
             replys.append("例句：\n"+reply+"\n")
             replys.append("----------------------------")
         if replys == []:
-            return None
+            return None,None
         replys.pop()
         return "\n".join(replys), en_cn
 
