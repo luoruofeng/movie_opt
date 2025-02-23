@@ -184,7 +184,7 @@ class LaunageAI:
                 return score
             score = int(numbers[0])
 
-            q = f"在{en_str}这句话中是否存在{most_hard_word}这个单词。如果存在直接返回“是”，否则返回“否”"
+            q = f"这句话中:“{en_str}”是否存在 {most_hard_word} 这个单词。如果存在直接返回“是”，否则返回“否”"
             result = self.ask_english_teacher_local_llm(q,model_name="qwen2.5:14b")
             logging.info("提问："+q+"\n回答：\n"+result+"\n")
             print("提问："+q+"\n回答：\n"+result+"\n")
@@ -230,7 +230,7 @@ class LaunageAI:
         replys = []
         en_cn = {}
         for word in most_hard_word:
-            first_line = word + " "
+            first_line = word + "\n"
             q = f"这个单词：{word}的中文翻译，直接回复翻译结果不要回复其他内容，如果有多个翻译结果用分号隔开，如果这样的单词不存在或拼写错误直接返回“单词错误”"
             reply = self.ask_english_teacher_local_llm(q,model_name="qwen2.5:14b")
             logging.info("提问："+q+"\n回答：\n"+reply+"\n")
@@ -247,13 +247,13 @@ class LaunageAI:
             # first_line += (reply+" ")
             replys.append(first_line)
 
-            q = f"这个单词：{word}的造一句例句，要求例句简单，常用,例句的中文翻译重启一行"
-            reply = self.ask_english_teacher_local_llm(q,model_name="qwen2.5:14b")
-            logging.info("提问："+q+"\n回答：\n"+reply+"\n")
-            print("提问："+q+"\n回答：\n"+reply+"\n")
-            reply = add_indent_to_str(reply)
-            replys.append("例句：\n"+reply+"\n")
-            replys.append("----------------------------")
+            # q = f"这个单词：{word}的造一句例句，要求例句简单，常用,例句的中文翻译重启一行"
+            # reply = self.ask_english_teacher_local_llm(q,model_name="qwen2.5:14b")
+            # logging.info("提问："+q+"\n回答：\n"+reply+"\n")
+            # print("提问："+q+"\n回答：\n"+reply+"\n")
+            # reply = add_indent_to_str(reply)
+            # replys.append("例句：\n"+reply+"\n")
+            replys.append("---------------")
         if replys == []:
             return None,None
         replys.pop()

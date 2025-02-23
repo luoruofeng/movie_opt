@@ -5,6 +5,8 @@ from movie_opt.utils import *
 from pkg_resources import resource_filename
 import logging
 import shutil
+from movie_opt.commands.ai import LaunageAI
+
 
 def delete_folders_except_merge(folder_path):
     """
@@ -169,32 +171,6 @@ def get_file_by_suffix_number(file_paths, target_number):
         if file_name_without_extension.endswith(target_suffix):
             return file_path
     return None
-
-def merge1(args):
-    cnen_c = merge_diff_type(args,1)
-    logging.info(f"merge1:逐行拼接“中英文对照”视频完成 {cnen_c}")
-
-    follow_c = merge_diff_type(args,2)
-    logging.info(f"merge1:逐行拼接“跟读”视频完成 {follow_c}")
-    
-    ear_c = merge_diff_type(args,3)
-    logging.info(f"merge1:逐行拼接“磨耳朵”视频完成 {args.path}\n{ear_c}")
-    
-
-def merge2(args):
-    dir_path = args.path
-    args.cnen_c = sort_paths_by_last_number(find_videos_in_special_folders(dir_path,"-中英对照"))
-    args.follow_c = sort_paths_by_last_number(find_videos_in_special_folders(dir_path,"-跟读"))
-    args.ear_c = sort_paths_by_last_number(find_videos_in_special_folders(dir_path,"-磨耳朵"))
-    merge_diff_type(args,4)
-    logging.info(f"merge2:相同编号的“1中英文对照 2跟读 3磨耳朵”视频拼接起来完成 {args.path}")
-
-def merge3(args):
-    merge_same_type(args,"-中英对照")
-    merge_same_type(args,"-跟读")
-    merge_same_type(args,"-磨耳朵")
-    
-
 
 def merge_same_type(args,dir_suffix="-中英对照"):
     dir_path = args.path
@@ -508,3 +484,36 @@ def merge_mp4(args, folder_types, video_type):
         
         r_paths.append(output_video)
     return r_paths
+
+
+class MergeOperater:
+    def __init__(self,launageAI):
+        self.launageAI:LaunageAI = launageAI
+
+
+    def merge1(self,args):
+        cnen_c = merge_diff_type(args,1)
+        logging.info(f"merge1:逐行拼接“中英文对照”视频完成 {cnen_c}")
+
+        follow_c = merge_diff_type(args,2)
+        logging.info(f"merge1:逐行拼接“跟读”视频完成 {follow_c}")
+        
+        ear_c = merge_diff_type(args,3)
+        logging.info(f"merge1:逐行拼接“磨耳朵”视频完成 {args.path}\n{ear_c}")
+        
+
+    def merge2(self,args):
+        dir_path = args.path
+        args.cnen_c = sort_paths_by_last_number(find_videos_in_special_folders(dir_path,"-中英对照"))
+        args.follow_c = sort_paths_by_last_number(find_videos_in_special_folders(dir_path,"-跟读"))
+        args.ear_c = sort_paths_by_last_number(find_videos_in_special_folders(dir_path,"-磨耳朵"))
+        merge_diff_type(args,4)
+        logging.info(f"merge2:相同编号的“1中英文对照 2跟读 3磨耳朵”视频拼接起来完成 {args.path}")
+
+    def merge3(self,args):
+        merge_same_type(args,"-中英对照")
+        merge_same_type(args,"-跟读")
+        merge_same_type(args,"-磨耳朵")
+        
+
+

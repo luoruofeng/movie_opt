@@ -15,7 +15,6 @@ import argparse
 from movie_opt.commands.create import create_pc, create_phone
 from movie_opt.commands.translate import find_db_word
 from movie_opt.commands.pdf import pdf_to_txt_pdfplumber, split_sentences_2voice
-from movie_opt.commands.merge import merge1, merge2, merge3
 from movie_opt.commands.custom import custom1
 from movie_opt.handle import Executor
 
@@ -206,18 +205,18 @@ def main():
     # Command merge -> Subcommand merge1
     subparser_merge_merge1 = subparser_merge.add_parser("merge1", help="视频拼接1")
     subparser_merge_merge1.add_argument("--path", required=False, help="包含子文件夹的路径")
-    subparser_merge_merge1.set_defaults(func=merge1)
+    subparser_merge_merge1.set_defaults(func=executor.mergeOperater.merge1)
 
 
     # Command merge -> Subcommand merge2
     subparser_merge_merge2 = subparser_merge.add_parser("merge2", help="相同编号的“1中英文对照 2跟读 3磨耳朵”视频拼接起来")
     subparser_merge_merge2.add_argument("--path", required=True, help="包含子文件夹的路径")
-    subparser_merge_merge2.set_defaults(func=merge2)
+    subparser_merge_merge2.set_defaults(func=executor.mergeOperater.merge2)
 
     # Command merge -> Subcommand merge3
     subparser_merge_merge3 = subparser_merge.add_parser("merge3", help="将 所有“中英文对照”， 所有“跟读”， 所有“磨耳朵”视频拼接起来,形成三部完整的电影")
     subparser_merge_merge3.add_argument("--path", required=True, help="包含子文件夹的路径")
-    subparser_merge_merge3.set_defaults(func=merge3)
+    subparser_merge_merge3.set_defaults(func=executor.mergeOperater.merge3)
 
     #Command custom
     parser_custom = subparsers.add_parser("custom", help="自定义命令")

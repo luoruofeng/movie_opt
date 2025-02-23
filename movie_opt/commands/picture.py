@@ -2,6 +2,7 @@ import argparse
 import os
 import random
 import traceback
+from types import SimpleNamespace
 from pkg_resources import resource_filename
 import subprocess
 import sys
@@ -10,9 +11,11 @@ from movie_opt.utils import *
 import logging
 import os
 from PIL import Image, ImageDraw, ImageFont,ImageChops
+from movie_opt.commands.voice import VoiceOperater
+from movie_opt.commands.ai import LaunageAI
 
 
-def add_glowing_border_with_rounded_corners(image_path: str, radius: int = 20, border_width: int = 5, border_color: str = "#39FF14"):
+def add_glowing_border_with_rounded_corners(image_path: str, radius: int = 20, border_width: int = 1, border_color: str = "#FFFFFF"):
     """
     对给定的 PNG 图片进行处理：
       - 判断图片路径是否存在
@@ -129,7 +132,7 @@ def split_fragment_video(split_endtime_json_list,video_name,video_extension,vide
 
 
 def add_titles_to_images(video_path, folder_path):
-    font_path = os.path.join(os.path.dirname(__file__), 'static', "SourceHanSerif-Bold.otf")
+    font_path = os.path.join(os.path.dirname(__file__), 'static', "AlibabaPuHuiTi-3-115-Black.ttf")
     video_name = os.path.splitext(os.path.basename(video_path))[0]
 
     main_title_font_size = 180
@@ -230,7 +233,7 @@ def crop_to_portrait(video_path, output_path, target_resolution=(720, 1280)):
 
 def add_info_text_to_images(video_path, folder_path, srt_path):
     # 字体路径
-    font_path = os.path.join(os.path.dirname(resource_filename(__name__,".")),'static', "SourceHanSerif-Bold.otf")
+    font_path = os.path.join(os.path.dirname(resource_filename(__name__,".")),'static', "AlibabaPuHuiTi-3-115-Black.ttf")
     font_size = 99
     font_color = (57, 255, 20)  # 荧光亮绿色
     stroke_color = (0, 0, 0)    # 黑色描边
@@ -343,13 +346,14 @@ def split_complete_video(split_endtime_json_list,video_name,video_extension,vide
             logging.info(f"按行完整保存 {output_path} video:{video} command:{' '.join(command)} en_content:{en_content} cn_content:{cn_content}")
             subprocess.run(command, check=True)
             
-            st = subtract_one_millisecond(end_time)
+            # st = subtract_one_millisecond(end_time)
+            st = add_one_millisecond(end_time)
 
 
 class PictureOperater:
     def __init__(self,launageAI,voiceOperater):
-        self.launageAI = launageAI
-        self.voiceOperater = voiceOperater
+        self.launageAI:LaunageAI = launageAI
+        self.voiceOperater:VoiceOperater = voiceOperater
 
 
 
@@ -547,7 +551,11 @@ class PictureOperater:
             logging.info(f"创建文件夹:{video_split_complete_dir}")
 
             video_name, _ = os.path.splitext(os.path.basename(video))
-
+            
+            filter_count = 13
+            if args.avg_en_word_count is not None and args.avg_en_word_count > 0:
+                filter_count = args.avg_en_word_count
+            
             try:
 
                 # 按照行字幕-分段原视频
@@ -557,7 +565,7 @@ class PictureOperater:
                 split_complete_video(split_endtime_json_list,video_name,video_extension,video_split_complete_dir,video)
 
                 # 按照行字幕-分段原视频-不同视频(上一行字幕的结束到这一行字幕的开始)
-                self.split_different_video(split_endtime_json_list,video_name,video_extension,video,explain_dir,screenshots_dir,video_child_dir,video_cn_dir,video_clips_dir,video_clips_dir2,video_empty_dir,15,1)
+                self.split_different_video(split_endtime_json_list,video_name,video_extension,video,explain_dir,screenshots_dir,video_child_dir,video_cn_dir,video_clips_dir,video_clips_dir2,video_empty_dir,filter_count,1)
             except Exception as e:
                 logging.error(f"split_video异常",exc_info=True)
                 traceback.print_exc()
@@ -587,11 +595,11 @@ class PictureOperater:
         os.makedirs(images_dir, exist_ok=True)
         os.makedirs(pictures_dir, exist_ok=True)
 
-        # 随机截图 333 张
+        # 随机截图 111 张
         print("Starting to generate 100 random screenshots...")
-        for i in range(333):
+        for i in range(111):
             output_image = os.path.join(images_dir, f"frame_{i + 1}.png")
-            print(f"创建333张封面 output_image:{output_image}")
+            print(f"创建111张封面 output_image:{output_image}")
             timestamp = random.uniform(0, video_duration)  # 随机时间戳
             if os.path.exists(output_image):
                 os.remove(output_image)
@@ -603,7 +611,7 @@ class PictureOperater:
                 "-frames:v", "1",
                 output_image
             ]
-            logging.info(f"创建333张封面 {' '.join(ffmpeg_cmd)}")
+            logging.info(f"创建111张封面 {' '.join(ffmpeg_cmd)}")
             subprocess.run(ffmpeg_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding="utf-8")
             print(f"Generated screenshot: {output_image}")
 
@@ -663,8 +671,7 @@ class PictureOperater:
             cn_content = info["cn"]
             en_content = info["en"]
             
-            set_words = set(en_content.split(" "))
-            set_word_count = len(''.join(str(item) for item in set_words))
+            set_word_count = count_set_en_word(en_content)
 
             # 若该行字幕少于filter_count个字符不生成跟读视频
             if set_word_count < filter_count:
@@ -673,7 +680,7 @@ class PictureOperater:
             
             explain_path = None
             try:
-                # 句子和最难的单词分数低于filter_score分不生成跟读视频
+                # 句子和最难的单词分数低于filter_score分不生解释图片，如果报错就直接跳过后面的视频生成代码
                 most_hard_words = self.launageAI.get_hard_word_scores(cn_content,en_content,filter_score)
                 # 解释每个有难度的单词
                 if most_hard_words is not None:
@@ -688,10 +695,10 @@ class PictureOperater:
                             colors_exs = {}
                             colors_exs["例句："] = "green"
                             for en,cn in en_cn_translations.items():
-                                colors_exs[en] = "blue"
-                                colors_exs[cn] = "red"
+                                colors_exs[en] = "#f7cd05"
+                                colors_exs[cn] = "white"
                         logging.info(f"解释单词作色：{colors_exs} id:{id_counter} en_content:{en_content}")
-                        create_png_with_text(explain,explain_path,background_alpha=70,font_size=38,colors_ex=colors_exs)    
+                        create_png_with_text_width_scalable(explain,explain_path,background_alpha=95,font_size=43,colors_ex=colors_exs)    
                         logging.info(f"PNG 图片已保存: {explain_path} colors_ex={colors_exs}")
                         add_glowing_border_with_rounded_corners(explain_path)
                         logging.info(f"修改解释图片的边框和圆角: {explain_path}")
@@ -708,22 +715,22 @@ class PictureOperater:
             
             #edge-tts生成中文mp3
             cn_voice = os.path.join(os.path.dirname(video),"cn_temp.mp3")
-            self.voiceOperater.edge_tts_voice(argparse.Namespace(content=cn_content,save_path=cn_voice,language="zh-cn",voice=None))
+            self.voiceOperater.edge_tts_voice(SimpleNamespace(content=cn_content,save_path=cn_voice,language="zh-cn",voice=None))
 
             #edge-tts生成儿童发音mp3
             child_voice = os.path.join(os.path.dirname(video),"child_temp.mp3")
-            self.voiceOperater.edge_tts_voice(argparse.Namespace(content=en_content,save_path=child_voice,language="en-child",voice=None))
+            self.voiceOperater.edge_tts_voice(SimpleNamespace(content=en_content,save_path=child_voice,language="en-child",voice=None))
             
 
             #edge-tts生成英国英语女发音mp3
             content_voice = os.path.join(os.path.dirname(video),"temp.mp3")
             print(f"File saved to: {content_voice}")
-            self.voiceOperater.edge_tts_voice(argparse.Namespace(content=en_content,save_path=content_voice,language=None,voice="en-GB-SoniaNeural"))
+            self.voiceOperater.edge_tts_voice(SimpleNamespace(content=en_content,save_path=content_voice,language=None,voice="en-GB-SoniaNeural"))
             
 
             #edge-tts生成美国英语男发音mp3
             content_voice2 = os.path.join(os.path.dirname(video),"temp2.mp3")
-            self.voiceOperater.edge_tts_voice(argparse.Namespace(content=en_content,save_path=content_voice2,language=None,voice="en-US-AndrewMultilingualNeural"))
+            self.voiceOperater.edge_tts_voice(SimpleNamespace(content=en_content,save_path=content_voice2,language=None,voice="en-US-AndrewMultilingualNeural"))
             
 
             #拼接音频“1s空白”和“中文内容”

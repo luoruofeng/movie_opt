@@ -2,6 +2,7 @@ import os
 import subprocess
 import traceback
 import re
+from movie_opt.commands.ai import LaunageAI
 from movie_opt.utils import *
 import shutil
 from datetime import timedelta
@@ -28,14 +29,16 @@ PlayDepth: 0
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Chinese,Alibaba Sans Bold,27,&H00FFFFFF,&H00000000,&H00000000,&H00FFFFFF,1,0,0,0,100,100,0,0,3,4,0,2,10,10,10,1
-Style: English,AlibabaSans-HeavyItalic,31,&H00FFFFFF,&H00000000,&H00000000,&H00FFFFFF,1,0,0,0,100,100,-2,0,1,4,0,2,10,10,10,1
-Style: Chinese_yellow,Alibaba Sans Bold,27,&H00FFFF00,&H00000000,&H00000000,&H00FFFF00,1,0,0,0,100,100,0,0,3,4,0,2,10,10,10,1
-Style: English_yellow,AlibabaSans-HeavyItalic,37,&H00FFFF00,&H00000000,&H00000000,&H00FFFF00,1,0,0,0,100,100,-2,0,1,4,0,2,10,10,10,1
+Style: Chinese,AlibabaPuHuiTi-3-115-Black,27,&H0005CDF7,&H00000000,&H00000000,&HFF000000,1,0,0,0,100,100,0,0,3,3,6,2,10,10,10,1
+Style: English,Alibaba Sans Black,28,&H0005CDF7,&H00000000,&H00000000,&HFF000000,1,0,0,0,100,100,-2,0,1,3,3,6,2,10,10,10,1
+Style: Chinese_yellow,AlibabaPuHuiTi-3-115-Black,27,&H00FFFF00,&H00000000,&H00000000,&HFF000000,1,0,0,0,100,100,0,0,3,3,6,2,10,10,10,1
+Style: English_yellow,Alibaba Sans Black,37,&H00FFFF00,&H00000000,&H00000000,&HFF000000,1,0,0,0,100,100,-2,0,1,3,3,6,2,10,10,10,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
+
+
 
 def format_time(time_str):
     """格式化时间字符串，确保小数点后只保留两位"""
@@ -284,7 +287,53 @@ def split_cn_en_text(text):
 
 class SubtitleOperater:
     def __init__(self,launageAI):
-        self.launageAI = launageAI
+        self.launageAI:LaunageAI = launageAI
+
+    
+    def average_english_line_length(self,srt_file_path):
+        """
+        计算 SRT 字幕文件中每行英文内容去除空格和重复单词后的平均字符长度。
+        规则：
+        - 如果行为空、纯数字（字幕编号）、或包含时间戳（例如含 "-->" 的行），则跳过；
+        - 如果行中包含一个或以上的中文字符，则跳过；
+        - 其它行视为英文内容，统计其字符数。
+        
+        参数：
+        srt_file_path: SRT 字幕文件的路径
+        
+        返回：
+        平均字符长度（float），若没有符合条件的行则返回 0。
+        """
+        total_length = 0
+        valid_line_count = 0
+
+        with open(srt_file_path, 'r', encoding='utf-8') as file:
+            for line in file:
+                line = line.strip()
+                # 跳过空行
+                if not line:
+                    continue
+                # 跳过纯数字（字幕编号）
+                if line.isdigit():
+                    continue
+                # 跳过时间戳行（包含 -->）
+                if '-->' in line:
+                    continue
+                # 如果行中包含中文字符，跳过
+                if contains_chinese(line):
+                    continue
+                
+                # 累加符合条件行的字符长度
+                total_length += count_set_en_word(line)
+                valid_line_count += 1
+        
+        if valid_line_count == 0:
+            return 0
+        result = total_length / valid_line_count
+        logging.info(f"srt文件：{srt_file_path} 英文总行数：{valid_line_count} 累加符合条件行的字符长度：{total_length} average_english_line_length: {result}")
+        return result
+
+
 
     def count_srt_statistics(self, args):
         """
@@ -316,6 +365,10 @@ class SubtitleOperater:
                 new_lines.append(line)
         
         modified_dialogues = []
+
+        filter_count = 13
+        if args.avg_en_word_count is not None and args.avg_en_word_count > 0:
+            filter_count = args.avg_en_word_count
         
         for i in range(0, len(dialogue_lines) - 1, 2):
             ch_line = dialogue_lines[i]
@@ -330,6 +383,15 @@ class SubtitleOperater:
                 print(f"English: {en_text}")
 
                 try:
+                    set_word_count = count_set_en_word(en_text)
+                    # 若该行字幕少于filter_count个字符不生成跟读视频
+                    if set_word_count < filter_count:
+                        print(f"英文字幕数少于{filter_count}个字符不生成跟读视频 {en_text}")
+                        modified_dialogues.append(ch_line)
+                        modified_dialogues.append(en_line)
+                        continue
+
+
                     most_hard_word_score = self.launageAI.get_hard_word_scores(ch_text,en_text)
                     if most_hard_word_score is not None and len(most_hard_word_score) > 0:
                         for word, score in most_hard_word_score.items():

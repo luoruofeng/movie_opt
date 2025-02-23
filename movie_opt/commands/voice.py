@@ -1,4 +1,5 @@
 import os
+import traceback
 import torch
 from pydub import AudioSegment
 import requests
@@ -8,6 +9,8 @@ from gtts import gTTS
 import asyncio
 import logging
 import edge_tts
+
+from movie_opt.commands.ai import LaunageAI
 
 
 def change_4_edge_tts_voice(content):
@@ -33,7 +36,7 @@ def change_4_edge_tts_voice(content):
 
 class VoiceOperater:
     def __init__(self,launageAI):
-        self.launageAI = launageAI
+        self.launageAI:LaunageAI = launageAI
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
 
@@ -80,8 +83,9 @@ class VoiceOperater:
                     return
                 except Exception as e:
                     logging.error(f"Attempt {attempt} failed: {e}")
+                    traceback.print_exc()
                     if attempt == retries:
-                        raise RuntimeError(f"Failed to generate TTS after {retries} attempts")
+                        raise RuntimeError(f"Failed to generate TTS after {retries} attempts {e}")
 
         # 如果事件循环已存在，复用现有循环
         try:

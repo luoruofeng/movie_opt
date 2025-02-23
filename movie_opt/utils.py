@@ -80,6 +80,11 @@ def compute_srt_statistics(srt_file_path):
 
 
 
+def count_set_en_word(text:str):
+    set_words = set(text.split(" "))
+    return len(''.join(str(item) for item in set_words))
+                    
+
 def parse_timestamp_to_s(timestamp):
     """ 将 SRT 时间戳解析为秒和毫秒 """
     # 使用正则表达式分割时间戳，匹配到可能有小时、分钟、秒和毫秒的格式
@@ -91,15 +96,17 @@ def parse_timestamp_to_s(timestamp):
     total_seconds = hours * 3600 + minutes * 60 + seconds
     return total_seconds, milliseconds
 
-def overlay_image(background_path, overlay_path, output_path=None):
+def overlay_image(background_path, overlay_path, output_path=None, new_width=None):
     """
-    将 overlay_path 指定的图片覆盖到 background_path 指定的背景图片上，
-    要求：
-      - 覆盖图片大小调整为背景图片宽度的75%（等比例缩放）；
-      - 覆盖图片放置在背景图片顶部，从背景图片顶部开始10px处；
-      - 水平居中对齐。
+    将 overlay_path 指定的图片覆盖到 background_path 指定的背景图片上，要求：
+      - 如果传递了 new_width 参数（例如 75），则将 overlay_path 图片宽度调整为 new_width（等比例缩放）；
+      - 否则保持 overlay_path 图片的原始宽度不变；
+      - 覆盖图片放置在背景图片的垂直居中且左对齐的位置，
+        左边与背景图片左边缘保持27px的距离。
     如果未提供 output_path，则直接覆盖原背景图片。
     """
+    from PIL import Image
+
     # 打开背景图片并转换为RGBA模式（支持透明度）
     bg = Image.open(background_path).convert("RGBA")
     # 打开覆盖图片并转换为RGBA模式
@@ -107,17 +114,20 @@ def overlay_image(background_path, overlay_path, output_path=None):
     
     bg_width, bg_height = bg.size
     
-    # 计算覆盖图片的新宽度（75%背景宽度）以及等比例缩放后的高度
-    new_overlay_width = int(bg_width * 0.75)
-    scale_ratio = new_overlay_width / overlay.width
-    new_overlay_height = int(overlay.height * scale_ratio)
+    if new_width is not None:
+        # 将 overlay 图片调整为指定宽度，等比例缩放
+        new_overlay_width = int(new_width)
+        scale_ratio = new_overlay_width / overlay.width
+        new_overlay_height = int(overlay.height * scale_ratio)
+        overlay_resized = overlay.resize((new_overlay_width, new_overlay_height), Image.LANCZOS)
+    else:
+        # 保持 overlay 图片原始大小
+        overlay_resized = overlay
+        new_overlay_width, new_overlay_height = overlay.size
     
-    # 调整覆盖图片大小
-    overlay_resized = overlay.resize((new_overlay_width, new_overlay_height), Image.LANCZOS)
-    
-    # 计算覆盖图片的放置位置：左右居中，距离背景顶部10px
-    x = (bg_width - new_overlay_width) // 2
-    y = 10
+    # 计算覆盖图片的放置位置：垂直居中且左对齐，左边距27px
+    x = 27
+    y = (bg_height - new_overlay_height) // 2
     
     # 将覆盖图片粘贴到背景图片上，使用覆盖图片自身的 alpha 作为蒙版
     bg.paste(overlay_resized, (x, y), overlay_resized)
@@ -126,10 +136,13 @@ def overlay_image(background_path, overlay_path, output_path=None):
     if output_path is None:
         output_path = background_path
     
+    # 如果输出路径为jpg/jpeg，则转换为RGB模式（不支持透明度）
     if output_path.lower().endswith(('.jpg', '.jpeg')):
         bg = bg.convert("RGB")
     
     bg.save(output_path)
+    print(f"图片已保存: {output_path}")
+
 
 
 
@@ -261,6 +274,105 @@ def create_png_with_text(text, output_path, font_size=44, background_alpha=100, 
     print(f"PNG 图片已保存: {output_path}")
 
 
+def create_png_with_text_width_scalable(text, output_path, font_size=44, background_alpha=100, image_width=1284,
+                           font_color="white", background_color=(255, 255, 255), colors_ex=None):
+    import os
+    from PIL import Image, ImageDraw, ImageFont
+    from pkg_resources import resource_filename
+
+    # 配置边距、阴影和描边宽度
+    margin = 10
+    line_spacing = 5
+    stroke_width = 3        # 文字边缘线宽度
+    shadow_offset = 3       # 阴影偏移（向右下）
+
+    # 计算背景透明度
+    alpha = int(background_alpha * 255 / 100)
+    bg_rgba = (background_color[0], background_color[1], background_color[2], alpha)
+
+    # 加载字体
+    font_path = os.path.join(os.path.dirname(resource_filename(__name__, ".")),
+                             'commands/static', "AlibabaPuHuiTi-3-115-Black.ttf")
+    try:
+        font = ImageFont.truetype(font_path, font_size)
+    except OSError:
+        raise ValueError(f"找不到字体文件，请修改路径或安装字体。{font_path}")
+
+    # 为换行与包装做准备，先创建一个临时绘图对象
+    dummy_image = Image.new('RGBA', (image_width, 1), bg_rgba)
+    dummy_draw = ImageDraw.Draw(dummy_image)
+
+    # 按行拆分文本（支持 colors_ex 时的多色分段）
+    lines = text.split("\n")
+    wrapped_lines = []
+    for line in lines:
+        if colors_ex is None:
+            colorized_segments = [(line, "")]
+        else:
+            colorized_segments = colorize_text(line, colors_ex)
+        wrapped_lines.append(colorized_segments)
+
+    image_height = margin
+    line_infos = []  # 存储每行包装后的信息，格式为 (line_segments, y_pos)
+    # 为保证描边和阴影不超出范围，预留右侧额外空间 shadow_offset
+    max_content_width = image_width - 2 * margin - shadow_offset
+
+    # 按字符逐步包装文本
+    for segments in wrapped_lines:
+        current_line = ""
+        line_segments = []
+        for segment, color in segments:
+            for char in segment:
+                test_line = current_line + char
+                bbox = dummy_draw.textbbox((0, 0), test_line, font=font)
+                text_width = bbox[2] - bbox[0]
+                if text_width > max_content_width:
+                    line_infos.append((line_segments, image_height))
+                    image_height += font_size + line_spacing
+                    current_line = char
+                    line_segments = [(char, color)]
+                else:
+                    current_line = test_line
+                    line_segments.append((char, color))
+        if line_segments:
+            line_infos.append((line_segments, image_height))
+            image_height += font_size + line_spacing
+
+    image_height += margin
+
+    # 根据所有行计算实际内容宽度（考虑右侧阴影偏移）
+    max_line_width = 0
+    for line_segments, _ in line_infos:
+        x_pos = margin
+        for char, _ in line_segments:
+            bbox = dummy_draw.textbbox((0, 0), char, font=font)
+            x_pos += bbox[2] - bbox[0]
+        if x_pos > max_line_width:
+            max_line_width = x_pos
+    # 实际宽度为内容宽度加上左侧 margin 和右侧（margin+阴影偏移），但不超过 image_width
+    actual_width = min(image_width, max_line_width + margin + shadow_offset)
+
+    # 创建最终图片，并重新获取绘图对象
+    image = Image.new('RGBA', (actual_width, image_height), bg_rgba)
+    draw = ImageDraw.Draw(image)
+
+    # 绘制每行文本：先绘制阴影，再绘制带描边的文字
+    for line_segments, y_pos in line_infos:
+        x_pos = margin
+        for char, color in line_segments:
+            # 阴影：向右下偏移 shadow_offset
+            draw.text((x_pos + shadow_offset, y_pos + shadow_offset), char, font=font, fill="black")
+            # 主文本：使用 stroke_width 和 stroke_fill 实现 3px 的黑色边缘线
+            draw.text((x_pos, y_pos), char, font=font,
+                      fill=color if color else font_color,
+                      stroke_width=stroke_width, stroke_fill="black")
+            bbox = draw.textbbox((0, 0), char, font=font)
+            x_pos += bbox[2] - bbox[0]
+
+    image.save(output_path, "PNG")
+    print(f"PNG 图片已保存: {output_path}")
+
+
 
 def remove_non_alphanumeric(text: str) -> str:
     """
@@ -298,21 +410,31 @@ def split_sentences(text: str):
     
     return sentences
 
+
+def contains_chinese(text: str) -> bool:
+    """
+    判断输入的字符串是否包含至少一个汉字。
+    
+    参数:
+        text (str): 要检查的字符串
+        
+    返回:
+        bool: 如果包含汉字返回 True，否则返回 False
+    """
+    # 正则表达式匹配常见汉字的 Unicode 范围
+    return bool(re.search(r'[\u4e00-\u9fff]', text))
+
+
 def detect_language(text):
     """
     判断字符串是英文、中文，还是混合内容
     :param text: 输入字符串
-    :return: "English", "Chinese", "Mixed"
+    :return: "English", "Chinese"
     """
-    english_pattern = re.compile(r'^[A-Za-z\s]+$')  # 仅包含英文字符和空格
-    chinese_pattern = re.compile(r'^[\u4e00-\u9fff\s]+$')  # 仅包含中文字符和空格
-
-    if english_pattern.match(text):
-        return "English"
-    elif chinese_pattern.match(text):
+    if contains_chinese(text):
         return "Chinese"
     else:
-        return "Mixed"
+        return "English"
 
 
 
@@ -619,7 +741,7 @@ def add_text_to_video(input_file, text):
 
     try:
         # 字体文件路径
-        font_path = os.path.join(resource_filename(__name__,"commands"),'static', "SourceHanSerif-Bold.otf")  # 确保使用正确的路径
+        font_path = os.path.join(resource_filename(__name__,"commands"),'static', "AlibabaPuHuiTi-3-115-Black.ttf")  # 确保使用正确的路径
         # drawtext需要修改路径样式为 "C\:/Users/luoruofeng/Desktop/test3/SourceHanSerif-Bold.otf"
         font_path = font_path.replace("\\","/").replace(":","\\:")
         # 构造ffmpeg命令
@@ -860,6 +982,29 @@ def subtract_one_millisecond(time_str: str) -> str:
     except ValueError:
         raise ValueError("时间格式错误，请使用 00:00:00,000 格式的时间字符串")
 
+
+
+def add_one_millisecond(time_str: str) -> str:
+    """
+    增加1毫秒，并返回新的时间字符串，格式为 00:00:00,000。
+    
+    :param time_str: 输入时间字符串，格式为 00:00:00,000
+    :return: 增加1毫秒后的时间字符串，格式为 00:00:00,000
+    """
+    if time_str is None:
+        return None
+    time_format = "%H:%M:%S,%f"
+    try:
+        # 将字符串解析为 datetime 对象
+        time_obj = datetime.strptime(time_str, time_format)
+        
+        # 增加 1 毫秒
+        updated_time_obj = time_obj + timedelta(milliseconds=1)
+        
+        # 格式化回字符串，并返回（去掉多余的微秒部分）
+        return updated_time_obj.strftime(time_format)[:-3]
+    except ValueError:
+        raise ValueError("时间格式错误，请使用 00:00:00,000 格式的时间字符串")
 
 
 def contains_chinese(text: str) -> bool:
