@@ -505,6 +505,7 @@ class PictureOperater:
 
         video_extension = get_file_extension(video)
 
+        filter_score=3
 
         if srt_path.endswith(".srt"):
             print(f"处理字幕文件: {srt_path}")
@@ -552,7 +553,7 @@ class PictureOperater:
 
             video_name, _ = os.path.splitext(os.path.basename(video))
             
-            filter_count = 13
+            filter_count = 10
             if args.avg_en_word_count is not None and args.avg_en_word_count > 0:
                 filter_count = args.avg_en_word_count
             
@@ -565,7 +566,7 @@ class PictureOperater:
                 split_complete_video(split_endtime_json_list,video_name,video_extension,video_split_complete_dir,video)
 
                 # 按照行字幕-分段原视频-不同视频(上一行字幕的结束到这一行字幕的开始)
-                self.split_different_video(split_endtime_json_list,video_name,video_extension,video,explain_dir,screenshots_dir,video_child_dir,video_cn_dir,video_clips_dir,video_clips_dir2,video_empty_dir,filter_count,1)
+                self.split_different_video(split_endtime_json_list,video_name,video_extension,video,explain_dir,screenshots_dir,video_child_dir,video_cn_dir,video_clips_dir,video_clips_dir2,video_empty_dir,filter_count,filter_score)
             except Exception as e:
                 logging.error(f"split_video异常",exc_info=True)
                 traceback.print_exc()
@@ -698,7 +699,13 @@ class PictureOperater:
                                 colors_exs[en] = "#f7cd05"
                                 colors_exs[cn] = "white"
                         logging.info(f"解释单词作色：{colors_exs} id:{id_counter} en_content:{en_content}")
-                        create_png_with_text_width_scalable(explain,explain_path,background_alpha=95,font_size=43,colors_ex=colors_exs)    
+                        if len(most_hard_words) == 2:
+                            font_size = 38
+                        elif len(most_hard_words) > 2:
+                            font_size = 33
+                        else:
+                            font_size = 43
+                        create_png_with_text_width_scalable(explain,explain_path,background_alpha=95,font_size=font_size,colors_ex=colors_exs)    
                         logging.info(f"PNG 图片已保存: {explain_path} colors_ex={colors_exs}")
                         add_glowing_border_with_rounded_corners(explain_path)
                         logging.info(f"修改解释图片的边框和圆角: {explain_path}")

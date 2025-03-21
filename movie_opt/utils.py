@@ -82,7 +82,7 @@ def compute_srt_statistics(srt_file_path):
 
 def count_set_en_word(text:str):
     set_words = set(text.split(" "))
-    return len(''.join(str(item) for item in set_words))
+    return len(set({item.strip().lower() for item in set_words}))
                     
 
 def parse_timestamp_to_s(timestamp):
@@ -371,7 +371,6 @@ def create_png_with_text_width_scalable(text, output_path, font_size=44, backgro
 
     image.save(output_path, "PNG")
     print(f"PNG 图片已保存: {output_path}")
-
 
 
 def remove_non_alphanumeric(text: str) -> str:

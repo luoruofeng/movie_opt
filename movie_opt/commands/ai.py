@@ -253,7 +253,7 @@ class LaunageAI:
             # print("提问："+q+"\n回答：\n"+reply+"\n")
             # reply = add_indent_to_str(reply)
             # replys.append("例句：\n"+reply+"\n")
-            replys.append("---------------")
+            replys.append(" \n")
         if replys == []:
             return None,None
         replys.pop()
@@ -263,11 +263,11 @@ class LaunageAI:
 
 
     # 句子和最难的单词低于指定分数返回空，否则返回所有高于指定分数的最难的单词
-    def get_hard_word_scores(self,cn_content,en_content,filter_score=1):
-        sentence_score = self.score_for_sentence(en_content)
-        if sentence_score <= filter_score:
-            logging.info(f"get_hard_word_scores-退出-语句分数低于{filter_score}分 en_content:{en_content}")
-            return None
+    def get_hard_word_scores(self,cn_content,en_content,filter_score=3):
+        # sentence_score = self.score_for_sentence(en_content)
+        # if sentence_score <= filter_score:
+        #     logging.info(f"get_hard_word_scores-退出-语句分数低于{filter_score}分 en_content:{en_content}")
+        #     return None
 
         most_hard_words = self.get_most_hard_words(cn_content,en_content)
         if most_hard_words is not None and len(most_hard_words) > 0:

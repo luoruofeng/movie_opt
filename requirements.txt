@@ -18,3 +18,4 @@ pdfplumber==0.11.5
 openai==1.59.7
 srt==3.5.3
 ass==0.5.4
+tenacity==9.0.0

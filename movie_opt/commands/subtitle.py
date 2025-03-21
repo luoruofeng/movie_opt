@@ -19,6 +19,7 @@ class PUNCTUATION_MARK(Enum):
     TIME_STAMP = 2
     CONTENT = 3
 
+
 ASS_STYLE = """
 [Script Info]
 Title: Converted SRT to ASS
@@ -29,15 +30,14 @@ PlayDepth: 0
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Chinese,AlibabaPuHuiTi-3-115-Black,27,&H0005CDF7,&H00000000,&H00000000,&HFF000000,1,0,0,0,100,100,0,0,3,3,6,2,10,10,10,1
-Style: English,Alibaba Sans Black,28,&H0005CDF7,&H00000000,&H00000000,&HFF000000,1,0,0,0,100,100,-2,0,1,3,3,6,2,10,10,10,1
+Style: Chinese,AlibabaPuHuiTi-3-115-Black,27,&H00FFFFFF,&H00000000,&H00000000,&HFF000000,1,0,0,0,100,100,0,0,3,3,6,2,10,10,10,1
+Style: English,Alibaba Sans Black,28,&H0005CDF7,&H00000000,&H00000000,&HFF000000,1,0,0,0,100,100,0,1,3,3,6,2,10,10,10,1
 Style: Chinese_yellow,AlibabaPuHuiTi-3-115-Black,27,&H00FFFF00,&H00000000,&H00000000,&HFF000000,1,0,0,0,100,100,0,0,3,3,6,2,10,10,10,1
-Style: English_yellow,Alibaba Sans Black,37,&H00FFFF00,&H00000000,&H00000000,&HFF000000,1,0,0,0,100,100,-2,0,1,3,3,6,2,10,10,10,1
+Style: English_yellow,Alibaba Sans Black,37,&H00FFFF00,&H00000000,&H00000000,&HFF000000,1,0,0,0,100,100,0,1,3,3,6,2,10,10,10,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
-
 
 
 def format_time(time_str):
@@ -290,7 +290,7 @@ class SubtitleOperater:
         self.launageAI:LaunageAI = launageAI
 
     
-    def average_english_line_length(self,srt_file_path):
+    def average_english_line_length(self,srt_file_path,adjust=2):
         """
         计算 SRT 字幕文件中每行英文内容去除空格和重复单词后的平均字符长度。
         规则：
@@ -324,13 +324,20 @@ class SubtitleOperater:
                     continue
                 
                 # 累加符合条件行的字符长度
-                total_length += count_set_en_word(line)
+                line_set_count = count_set_en_word(line)
+                print(f"英文行字符统计:{line} 字符长度：{line_set_count}")
+                logging.info(f"英文行字符统计:{line} 字符长度：{line_set_count}")
+                total_length += line_set_count
                 valid_line_count += 1
         
         if valid_line_count == 0:
             return 0
         result = total_length / valid_line_count
         logging.info(f"srt文件：{srt_file_path} 英文总行数：{valid_line_count} 累加符合条件行的字符长度：{total_length} average_english_line_length: {result}")
+        print(f"srt文件：{srt_file_path} 英文总行数：{valid_line_count} 累加符合条件行的字符长度：{total_length} average_english_line_length: {result}")
+        result -= adjust
+        result = int(result)
+        print(f"调整平均数：{adjust} 并且取整：{result}")
         return result
 
 

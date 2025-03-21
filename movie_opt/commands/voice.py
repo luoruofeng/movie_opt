@@ -1,4 +1,5 @@
 import os
+import time
 import traceback
 import torch
 from pydub import AudioSegment
@@ -63,8 +64,10 @@ class VoiceOperater:
             elif language == "en-child":
                 voice = "en-US-AnaNeural"  # 默认儿童英文
             elif language == "zh-cn":
+                rate = getattr(args, 'rate', '+30%')  # 添加语速参数，默认为正常语速
                 voice = "zh-CN-XiaoxiaoNeural"  # 默认中文
             elif language == "zh-tw":
+                rate = getattr(args, 'rate', '+30%')  # 添加语速参数，默认为正常语速
                 voice = "zh-TW-HsiaoChenNeural"  # 默认台湾中文
             else:
                 raise ValueError(f"Unsupported language: {language}")
@@ -74,18 +77,28 @@ class VoiceOperater:
             content = change_4_edge_tts_voice(content)
 
         async def run_tts_with_retry():
-            retries = 10
-            for attempt in range(1, retries + 1):
+            max_retries = 21  # 总重试次数改为21次[1,3](@ref)
+            for attempt in range(1, max_retries + 1):
                 try:
                     communicate = edge_tts.Communicate(content, voice, rate=rate)
                     await communicate.save(save_path)
                     print(f"Audio saved successfully at {save_path}")
+                    time.sleep(7)  # 保持原逻辑
                     return
                 except Exception as e:
                     logging.error(f"Attempt {attempt} failed: {e}")
-                    traceback.print_exc()
-                    if attempt == retries:
-                        raise RuntimeError(f"Failed to generate TTS after {retries} attempts {e}")
+                    if attempt == max_retries:
+                        print(f"Failed after {max_retries} attempts: {e}")
+                        return
+
+                    # 动态计算等待时间[5,6](@ref)
+                    if attempt <= 10:
+                        delay = attempt  # 前10次等待次数对应秒数
+                    else:
+                        delay = 600      # 10分钟后固定等待10分钟（600秒）
+                    
+                    print(f"Retrying in {delay}s...")
+                    await asyncio.sleep(delay)  # 异步等待
 
         # 如果事件循环已存在，复用现有循环
         try:

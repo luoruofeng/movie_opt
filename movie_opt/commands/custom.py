@@ -77,7 +77,6 @@ def custom1(args,executor):
 
                 video_name = os.path.basename(v)
                 subtitle_video_path = os.path.join(args.path,subdir, f"subtitle_{video_name}")
-                print(f"****************************************{subtitle_video_path}")
                 
                 if not os.path.exists(subtitle_video_path):
                     print("给视频添加ass字幕")
