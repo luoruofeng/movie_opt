@@ -8,6 +8,7 @@ import argparse
 import subprocess
 import shutil
 from movie_opt.commands.voice import VoiceOperater
+import torch
 
 # 替换一些符号为逗号，为了edge_tts可以朗读的时候断句
 def replace_punctuation(input_file_path):
@@ -158,8 +159,13 @@ def split_sentences_2voice(args):
         missing, duplicates = check_file_numbers(concat_file)
         if len(missing) > 0 or len(duplicates) > 0:
             return
+        if torch.cuda.is_available():
+            video_codec = "h264_nvenc"
+        else:
+            video_codec = "libx264"
+
         command = [
-            "ffmpeg", "-f", "concat", "-safe", "0", "-i", concat_file, "-c", "copy", output_mp3
+            "ffmpeg", "-f", "concat", "-safe", "0", "-i", concat_file, "-c:v", video_codec, "-c:a", "copy", output_mp3
         ]
         print(" ".join(command))
         # 执行命令并捕获错误信息

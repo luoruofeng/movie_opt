@@ -4,9 +4,10 @@ import os
 import sys
 import subprocess
 import traceback
+import shutil
 from types import SimpleNamespace
-from movie_opt.utils import *
 import re
+from movie_opt.utils import *
 from movie_opt.commands.merge import delete_folders_except_merge
 from movie_opt.handle import Executor
 
@@ -124,19 +125,25 @@ def custom1(args,executor):
                 video_segment_folder = os.path.join(subdir_path, "视频片段")
                 # 定义匹配文件名中序号的正则表达式
                 pattern = re.compile(r"-(\d+)\.srt$")
-                # 遍历文件夹中的所有文件
-                for file_name in os.listdir(srt_segment_folder):
+
+                file_list = os.listdir(srt_segment_folder)
+
+                srt_files_to_process = []
+                for f in file_list:
+                    if f.endswith(".srt"):
+                        match = pattern.search(f)
+                        if match:
+                            srt_files_to_process.append((f, int(match.group(1))))
+
+                srt_files_to_process.sort(key=lambda x: x[1])
+
+                # 遍历排序后的srt文件
+                for file_name, sequence in srt_files_to_process:
                     try:
-                        # 检查文件是否以 .srt 结尾
-                        if file_name.endswith(".srt"):
-                            srt_file_path = os.path.join(srt_segment_folder, file_name)
-                            match = pattern.search(file_name)
-                            if match:
-                                # 提取序号并转换为整数
-                                sequence = int(match.group(1))
-                                cargs = args
-                                cargs = argparse.Namespace(avg_en_word_count=avg_word_len,srt_path=srt_file_path,video_path=os.path.join(video_segment_folder,get_filename_without_extension(file_name)+video_extension))
-                                executor.pictureOperater.split_video(cargs)
+                        srt_file_path = os.path.join(srt_segment_folder, file_name)
+                        cargs = args
+                        cargs = argparse.Namespace(avg_en_word_count=avg_word_len,srt_path=srt_file_path,video_path=os.path.join(video_segment_folder,get_filename_without_extension(file_name)+video_extension))
+                        executor.pictureOperater.split_video(cargs)
                     except Exception as e:
                         print(f"按照字幕行，生成视频中每一句的朗读视频和跟读视频处理 {file_name} 时出错，错误: {str(e)}")
                         traceback.print_exc()
@@ -177,6 +184,27 @@ def custom1(args,executor):
 
     print("所有子文件夹处理完成。")
 
+
+def custom2(args, executor):
+    folder_path = args.path
+    if not os.path.isdir(folder_path):
+        print(f"Error: {folder_path} is not a valid directory.")
+        return
+
+    for item in os.listdir(folder_path):
+        if item.endswith(('.mp4', '.mkv')):
+            video_path = os.path.join(folder_path, item)
+            video_name = os.path.splitext(item)[0]
+            srt_path = os.path.join(folder_path, f"{video_name}.srt")
+
+            if os.path.exists(srt_path):
+                new_folder_path = os.path.join(folder_path, video_name)
+                if not os.path.exists(new_folder_path):
+                    os.makedirs(new_folder_path)
+
+                shutil.move(video_path, new_folder_path)
+                shutil.move(srt_path, new_folder_path)
+                print(f"Moved {item} and {video_name}.srt to {new_folder_path}")
 
 def custom3(args,executor):
     if executor is None:

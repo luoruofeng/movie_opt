@@ -2,7 +2,9 @@ import os
 import subprocess
 import traceback
 import re
+import torch
 from movie_opt.commands.ai import LaunageAI
+from movie_opt.config import QWEN_MODEL_NAME, FILTER_COUNT
 from movie_opt.utils import *
 import shutil
 from datetime import timedelta
@@ -373,7 +375,7 @@ class SubtitleOperater:
         
         modified_dialogues = []
 
-        filter_count = 13
+        filter_count = FILTER_COUNT
         if args.avg_en_word_count is not None and args.avg_en_word_count > 0:
             filter_count = args.avg_en_word_count
         
@@ -490,12 +492,17 @@ class SubtitleOperater:
         relative_video_path = os.path.relpath(video_path, start=path)
         relative_output_path = os.path.relpath(output_path, start=path)
         
+        if torch.cuda.is_available():
+            video_codec = "h264_nvenc"
+        else:
+            video_codec = "libx264"
+
         command = [
             'ffmpeg',
             '-i', relative_video_path,         # 输入视频文件
             '-vf', f"ass={relative_ass_path}",  # 应用字幕滤镜
-            '-c:v', 'libx264',                 # 对视频流重新编码
-            '-preset', 'ultrafast',             # 快速编码
+            '-c:v', video_codec,                 # 对视频流重新编码
+            '-preset', 'p1',             # 快速编码
             '-map', '0:v:0',                   # 只保留第一个视频流 (Stream #0:0)
             '-map', '0:a:0',                   # 只保留第一个音频流 (Stream #0:1，英语)
             '-c:a', 'aac',                     # 使用AAC编码器重新编码音频
@@ -711,7 +718,7 @@ class SubtitleOperater:
         sentences = None
         for i in range(4):
             print(f"第{i+1}次本地模型尝试")
-            reply = self.launageAI.ask_english_teacher_local_llm("不增加任何单词，不减少任何单词以及不改变任何单词顺序的情况下，语法和单词错误也不改变任何单词以及单词顺序的情况下，删除这段话中错误的标点符号，添加正确的标点符号，直接回答，不要回复任何无效内容，不要回复任何描述语言："+txt,model_name="qwen2.5:14b")
+            reply = self.launageAI.ask_english_teacher_local_llm("不增加任何单词，不减少任何单词以及不改变任何单词顺序的情况下，语法和单词错误也不改变任何单词以及单词顺序的情况下，删除这段话中错误的标点符号，添加正确的标点符号，直接回答，不要回复任何无效内容，不要回复任何描述语言："+txt,model_name=QWEN_MODEL_NAME)
             reply = reply.replace("\n","")
             if remove_non_alphanumeric(reply) != remove_non_alphanumeric_txt:
                 print(f"reply:{reply}")

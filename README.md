@@ -149,8 +149,10 @@ movie_opt.exe merge merge3  --path="C:\Users\luoruofeng\Desktop\test\视频片�
 ```
 
 
-# 操作多个包含了有双语srt和视频的动画片的文件夹
+# 操作多个包含了有双语srt和视频的动画片的文件夹（先执行custom2：将同名的mkv，mp4，srt放入同名的文件夹中）
 ```
+movie_opt.exe custom custom2  --path="C:\Users\luoruofeng\Desktop\test9"
+
 movie_opt.exe custom custom1  --path="C:\Users\luoruofeng\Desktop\test9"  --segment_second=28
 ```
 

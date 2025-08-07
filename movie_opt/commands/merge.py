@@ -1,5 +1,6 @@
 import os
 import subprocess
+import torch
 import re
 from movie_opt.utils import *
 from pkg_resources import resource_filename
@@ -248,16 +249,16 @@ def merge_diff_type(args,type):
             print("磨耳朵内容不能为空")
             return
         
-        if args.follow_c is None or len(args.follow_c) <= 0:
-            print("跟读内容不能为空")
-            return
+        # if args.follow_c is None or len(args.follow_c) <= 0:
+        #     print("跟读内容不能为空")
+        #     return
         
 
         file_extension = get_file_extension(args.cnen_c[0])
 
         cnen_h = os.path.join(os.path.dirname(resource_filename(__name__,".")),'static', "中英对照横屏"+file_extension)
         ear_h = os.path.join(os.path.dirname(resource_filename(__name__,".")),'static', "磨耳朵横屏"+file_extension)
-        follow_h = os.path.join(os.path.dirname(resource_filename(__name__,".")),'static', "跟读横屏"+file_extension)
+        # follow_h = os.path.join(os.path.dirname(resource_filename(__name__,".")),'static', "跟读横屏"+file_extension)
         
         output_dir = os.path.join(args.path, "合并视频-最终")
         os.makedirs(output_dir, exist_ok=True)
@@ -267,7 +268,7 @@ def merge_diff_type(args,type):
             video_index = int(get_filename_without_extension(v).split("-")[-1])
             
             ear_c = get_file_by_suffix_number(args.ear_c,video_index)
-            follow_c = get_file_by_suffix_number(args.follow_c,video_index)
+            # follow_c = get_file_by_suffix_number(args.follow_c,video_index)
             cnen_c = get_file_by_suffix_number(args.cnen_c,video_index)
             
             if cnen_c is None or len(cnen_c) <= 0:
@@ -278,17 +279,17 @@ def merge_diff_type(args,type):
                 print("磨耳朵内容不能为空!")
                 return
             
-            if follow_c is None or len(follow_c) <= 0:
-                print("跟读内容不能为空!")
-                return
+            # if follow_c is None or len(follow_c) <= 0:
+            #     print("跟读内容不能为空!")
+            #     return
             
             # 将内容视频的长宽改为头视频的长款才能拼接
             w,h = get_video_w_h(cnen_h)
             resize_video(cnen_c,w,h)
-            resize_video(follow_c,w,h)
+            # resize_video(follow_c,w,h)
             resize_video(ear_c,w,h)
 
-            merge_video = [cnen_h, cnen_c, follow_h, follow_c, ear_h, ear_c]
+            merge_video = [cnen_h, cnen_c, ear_h, ear_c]
             logging.info(f"merge_video:{merge_video}")
             video_extension = get_file_extension(cnen_c)
 
@@ -377,7 +378,7 @@ def merge_mp4(args, folder_types, video_type):
 
     for folder_index in sorted(folder_indexs):
         # 创建目标输出目录
-        output_dir = os.path.join(path, f"合并视频-{movie_name}-{folder_index}-{video_type}")
+        output_dir = os.path.join(path, f"合并视频-{video_type}-{folder_index}")
         os.makedirs(output_dir, exist_ok=True)
         
         # 定义正则表达式模式
@@ -464,12 +465,17 @@ def merge_mp4(args, folder_types, video_type):
         # 使用 ffmpeg 拼接视频
         output_video = os.path.join(output_dir, f"{movie_name}-{folder_index}{video_extension}")
         try:
+            if torch.cuda.is_available():
+                video_codec = "h264_nvenc"
+            else:
+                video_codec = "libx264"
             command = [
                     "ffmpeg",
                     "-f", "concat",
                     "-safe", "0",
                     "-i", merge_list_path,
-                    "-c","copy",
+                    "-c:v", video_codec,
+                    "-c:a", "copy",
                     output_video
                 ]
             print(" ".join(command))
@@ -495,8 +501,8 @@ class MergeOperater:
         cnen_c = merge_diff_type(args,1)
         logging.info(f"merge1:逐行拼接“中英文对照”视频完成 {cnen_c}")
 
-        follow_c = merge_diff_type(args,2)
-        logging.info(f"merge1:逐行拼接“跟读”视频完成 {follow_c}")
+        # follow_c = merge_diff_type(args,2)
+        # logging.info(f"merge1:逐行拼接“跟读”视频完成 {follow_c}")
         
         ear_c = merge_diff_type(args,3)
         logging.info(f"merge1:逐行拼接“磨耳朵”视频完成 {args.path}\n{ear_c}")
@@ -505,14 +511,14 @@ class MergeOperater:
     def merge2(self,args):
         dir_path = args.path
         args.cnen_c = sort_paths_by_last_number(find_videos_in_special_folders(dir_path,"-中英对照"))
-        args.follow_c = sort_paths_by_last_number(find_videos_in_special_folders(dir_path,"-跟读"))
+        # args.follow_c = sort_paths_by_last_number(find_videos_in_special_folders(dir_path,"-跟读"))
         args.ear_c = sort_paths_by_last_number(find_videos_in_special_folders(dir_path,"-磨耳朵"))
         merge_diff_type(args,4)
         logging.info(f"merge2:相同编号的“1中英文对照 2跟读 3磨耳朵”视频拼接起来完成 {args.path}")
 
     def merge3(self,args):
         merge_same_type(args,"-中英对照")
-        merge_same_type(args,"-跟读")
+        # merge_same_type(args,"-跟读")
         merge_same_type(args,"-磨耳朵")
         
 

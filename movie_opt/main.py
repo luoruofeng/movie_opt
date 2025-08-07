@@ -15,7 +15,7 @@ import argparse
 from movie_opt.commands.create import create_pc, create_phone
 from movie_opt.commands.translate import find_db_word
 from movie_opt.commands.pdf import pdf_to_txt_pdfplumber, split_sentences_2voice
-from movie_opt.commands.custom import custom1
+from movie_opt.commands.custom import custom1, custom2
 from movie_opt.handle import Executor
 
 def main():
@@ -228,6 +228,11 @@ def main():
     subparser_custom_custom1.add_argument("--segment_second", required=False, help="间隔秒数分段依据")
     # 例如，使用 lambda 将 executor 传递给 custom1
     subparser_custom_custom1.set_defaults(func=lambda args: custom1(args, executor))
+
+    # Command custom -> Subcommand custom2
+    subparser_custom_custom2 = subparser_custom.add_parser("custom2", help="将同名的mp4和srt文件移动到一个同名的文件夹中")
+    subparser_custom_custom2.add_argument("--path", required=True, help="包含mp4和srt文件的文件夹路径")
+    subparser_custom_custom2.set_defaults(func=lambda args: custom2(args, executor))
 
 
     #Command pdf

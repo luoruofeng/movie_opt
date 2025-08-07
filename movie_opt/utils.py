@@ -1,6 +1,7 @@
 import json
 import shutil
 import os
+import torch
 from pydub import AudioSegment
 import subprocess
 import shlex
@@ -743,6 +744,12 @@ def add_text_to_video(input_file, text):
         font_path = os.path.join(resource_filename(__name__,"commands"),'static', "AlibabaPuHuiTi-3-115-Black.ttf")  # 确保使用正确的路径
         # drawtext需要修改路径样式为 "C\:/Users/luoruofeng/Desktop/test3/SourceHanSerif-Bold.otf"
         font_path = font_path.replace("\\","/").replace(":","\\:")
+        
+        if torch.cuda.is_available():
+            video_codec = "h264_nvenc"
+        else:
+            video_codec = "libx264"
+
         # 构造ffmpeg命令
         command = [
             "ffmpeg",
@@ -755,6 +762,7 @@ def add_text_to_video(input_file, text):
                 "x=(w-text_w)/2:"  # 水平居中
                 "y=(h-text_h)/2"  # 垂直居中
             ),
+            "-c:v", video_codec,
             "-codec:a", "copy",  # 保留原始音频
             temp_file  # 临时输出文件
         ]
@@ -882,21 +890,33 @@ def resize_video(video_path, target_width, target_height, file_extension=".mp4")
     print(f"视频分辨率: {width}x{height}")
 
     if (width, height) != (target_width, target_height):
-        temp_path = f"{video_path}.temp"+file_extension
-        command = [
-            "ffmpeg",
-            "-i", video_path,
-            "-vf", f"scale={target_width}:{target_height}",
-            "-c:a", "copy",
-            temp_path
-        ]
+        temp_path = f"{video_path}.temp" + file_extension
+        if torch.cuda.is_available():
+            command = [
+                "ffmpeg",
+                "-hwaccel", "cuda",
+                "-i", video_path,
+                "-vf", f"scale_cuda={target_width}:{target_height}",
+                "-c:v", "h264_nvenc",
+                "-c:a", "copy",
+                temp_path
+            ]
+        else:
+            command = [
+                "ffmpeg",
+                "-i", video_path,
+                "-vf", f"scale={target_width}:{target_height}",
+                "-c:v", "libx264",
+                "-c:a", "copy",
+                temp_path
+            ]
         print(" ".join(command))
         try:
             subprocess.run(command, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             # 如果视频调整成功，删除原视频并重命名临时文件
             if os.path.exists(video_path):
                 os.remove(video_path)  # 删除原视频
-            
+
             if os.path.exists(temp_path):
                 os.rename(temp_path, video_path)  # 使用os.rename覆盖原视频
             print(f"视频分辨率已调整为: {target_width}x{target_height}，原视频已覆盖。")

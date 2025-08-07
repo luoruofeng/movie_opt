@@ -7,12 +7,15 @@ from pkg_resources import resource_filename
 import subprocess
 import sys
 import re
+import torch
 from movie_opt.utils import *
 import logging
 import os
 from PIL import Image, ImageDraw, ImageFont,ImageChops
 from movie_opt.commands.voice import VoiceOperater
 from movie_opt.commands.ai import LaunageAI
+from movie_opt import config
+from movie_opt.config import FILTER_COUNT, COMPOSITE_IMAGE_COUNT
 
 
 def add_glowing_border_with_rounded_corners(image_path: str, radius: int = 20, border_width: int = 1, border_color: str = "#FFFFFF"):
@@ -113,6 +116,11 @@ def split_fragment_video(split_endtime_json_list,video_name,video_extension,vide
         if end_seconds > video_totle_second:
             end_seconds = video_totle_second
 
+        if torch.cuda.is_available():
+            video_codec = "h264_nvenc"
+        else:
+            video_codec = "libx264"
+
         command = [
             "ffmpeg",
             "-accurate_seek",
@@ -121,7 +129,7 @@ def split_fragment_video(split_endtime_json_list,video_name,video_extension,vide
             "-to", f"{end_seconds:.3f}",
             "-map", "0",  # 保留所有轨道
             "-map_metadata", "-1",  # 清除全局元信息
-            "-c:v", "libx264",  # 强制重新编码视频
+            "-c:v", video_codec,  # 强制重新编码视频
             "-c:a", "aac",  # 强制重新编码音频
             "-movflags", "use_metadata_tags",  # 生成符合新元信息标准的文件
             output_path
@@ -505,7 +513,7 @@ class PictureOperater:
 
         video_extension = get_file_extension(video)
 
-        filter_score=3
+        filter_score = config.FILTER_SCORE
 
         if srt_path.endswith(".srt"):
             print(f"处理字幕文件: {srt_path}")
@@ -553,7 +561,7 @@ class PictureOperater:
 
             video_name, _ = os.path.splitext(os.path.basename(video))
             
-            filter_count = 10
+            filter_count = FILTER_COUNT
             if args.avg_en_word_count is not None and args.avg_en_word_count > 0:
                 filter_count = args.avg_en_word_count
             
@@ -596,11 +604,11 @@ class PictureOperater:
         os.makedirs(images_dir, exist_ok=True)
         os.makedirs(pictures_dir, exist_ok=True)
 
-        # 随机截图 111 张
-        print("Starting to generate 100 random screenshots...")
-        for i in range(111):
+        # 随机截图
+        print(f"Starting to generate {COMPOSITE_IMAGE_COUNT} random screenshots...")
+        for i in range(COMPOSITE_IMAGE_COUNT):
             output_image = os.path.join(images_dir, f"frame_{i + 1}.png")
-            print(f"创建111张封面 output_image:{output_image}")
+            print(f"创建{COMPOSITE_IMAGE_COUNT}张封面 output_image:{output_image}")
             timestamp = random.uniform(0, video_duration)  # 随机时间戳
             if os.path.exists(output_image):
                 os.remove(output_image)
@@ -612,7 +620,7 @@ class PictureOperater:
                 "-frames:v", "1",
                 output_image
             ]
-            logging.info(f"创建111张封面 {' '.join(ffmpeg_cmd)}")
+            logging.info(f"创建{COMPOSITE_IMAGE_COUNT}张封面 {' '.join(ffmpeg_cmd)}")
             subprocess.run(ffmpeg_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding="utf-8")
             print(f"Generated screenshot: {output_image}")
 
@@ -620,9 +628,9 @@ class PictureOperater:
         saved_images = [os.path.join(images_dir, img) for img in os.listdir(images_dir) if img.endswith(".png")]
         print(f"Total screenshots saved: {len(saved_images)}")
 
-        # 生成 444 张合成图片
-        print("Starting to generate 444 combined images...")
-        for i in range(444):
+        # 生成合成图片
+        print(f"Starting to generate {COMPOSITE_IMAGE_COUNT} combined images...")
+        for i in range(COMPOSITE_IMAGE_COUNT):
             # 随机选取 3 张图片
             selected_images = random.sample(saved_images, 3)
             image_objects = [Image.open(img) for img in selected_images]

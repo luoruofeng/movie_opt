@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 # 读取 requirements.txt 文件
 def read_requirements():
     with open("requirements.txt", "r", encoding="utf-8") as f:
-        return f.read().splitlines()
+        return [line.strip() for line in f if line.strip() and not line.strip().startswith(('--', '#'))]
 
 setup(
     name="movie_opt",
