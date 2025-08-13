@@ -15,7 +15,8 @@ import argparse
 from movie_opt.commands.create import create_pc, create_phone
 from movie_opt.commands.translate import find_db_word
 from movie_opt.commands.pdf import pdf_to_txt_pdfplumber, split_sentences_2voice
-from movie_opt.commands.custom import custom1, custom2
+from movie_opt.commands.custom import custom1, custom2, custom3
+
 from movie_opt.handle import Executor
 
 def main():
@@ -234,6 +235,11 @@ def main():
     subparser_custom_custom2.add_argument("--path", required=True, help="包含mp4和srt文件的文件夹路径")
     subparser_custom_custom2.set_defaults(func=lambda args: custom2(args, executor))
 
+    # Command custom -> Subcommand custom3
+    subparser_custom_custom3 = subparser_custom.add_parser("custom3", help="操作多个包含了有双语srt和视频的动画片的文件夹生成完整视频")
+    subparser_custom_custom3.add_argument("--path", required=True, help="包含子文件夹的路径")
+    # 例如，使用 lambda 将 executor 传递给 custom3
+    subparser_custom_custom3.set_defaults(func=lambda args: custom3(args, executor))
 
     #Command pdf
     parser_pdf = subparsers.add_parser("pdf", help="pdf操作")

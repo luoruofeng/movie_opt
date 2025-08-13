@@ -1,7 +1,7 @@
 # config.py
 
 # The model name for the AI.
-QWEN_MODEL_NAME = "qwen2.5:32b"
+QWEN_MODEL_NAME = "qwen2.5:14b"
 
 # The filter score for picture command.
 FILTER_SCORE = 5
@@ -10,4 +10,4 @@ FILTER_SCORE = 5
 FILTER_COUNT = 10
 
 # The number of composite images to generate.
-COMPOSITE_IMAGE_COUNT = 111
+COMPOSITE_IMAGE_COUNT = 11
