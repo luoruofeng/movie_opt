@@ -81,7 +81,7 @@ movie_opt.exe translate find_db_word --word="innovation"
 
 
 
-## 将srt文件安装时间间隔分段保存为新的srt文件
+## 将srt文件时间间隔分段保存为新的srt文件
 ```
 movie_opt.exe subtitle srtsegment --path="C:\Users\luoruofeng\Desktop\test" --second=13
 ```
@@ -149,11 +149,19 @@ movie_opt.exe merge merge3  --path="C:\Users\luoruofeng\Desktop\test\视频片�
 ```
 
 
-# 操作多个包含了有双语srt和视频的动画片的文件夹（先执行custom2：将同名的mkv，mp4，srt放入同名的文件夹中）
+# 操作多个包含了有双语srt和视频的动画片的文件夹，将视频分段用来发小红书（先执行custom2：将同名的mkv，mp4，srt放入同名的文件夹中）
 ```
 movie_opt.exe custom custom2  --path="C:\Users\luoruofeng\Desktop\test9"
 
 movie_opt.exe custom custom1  --path="C:\Users\luoruofeng\Desktop\test9"  --segment_second=28
+```
+
+
+# 操作多个包含了有双语srt和视频的动画片的文件夹，将生成完整的电影视频（先执行custom2：将同名的mkv，mp4，srt放入同名的文件夹中）
+```
+movie_opt.exe custom custom2  --path="C:\Users\luoruofeng\Desktop\test9"
+
+movie_opt.exe custom custom3  --path="C:\Users\luoruofeng\Desktop\test9"
 ```
 
 

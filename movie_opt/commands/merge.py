@@ -272,16 +272,16 @@ def merge_diff_type(args,type):
             cnen_c = get_file_by_suffix_number(args.cnen_c,video_index)
             
             if cnen_c is None or len(cnen_c) <= 0:
-                print("中英对照内容不能为空!")
-                return
+                print(f"视频索引:{video_index} 中英对照内容不能为空!")
+                continue
             
             if ear_c is None or len(ear_c) <= 0:
-                print("磨耳朵内容不能为空!")
-                return
+                print(f"视频索引:{video_index} 磨耳朵内容不能为空!")
+                continue
             
             # if follow_c is None or len(follow_c) <= 0:
             #     print("跟读内容不能为空!")
-            #     return
+            #     continue
             
             # 将内容视频的长宽改为头视频的长款才能拼接
             w,h = get_video_w_h(cnen_h)
@@ -413,10 +413,7 @@ def merge_mp4(args, folder_types, video_type):
                 if folder_type in folder_types:
                     filtered_videos.append(v)
         same_folder_index_videos = filtered_videos
-
-
-                
-
+        
         # 提取信息并排序
         def extract_key(video):
             match = pattern.search(video)

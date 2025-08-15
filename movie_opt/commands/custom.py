@@ -10,6 +10,8 @@ import re
 from movie_opt.utils import *
 from movie_opt.commands.merge import delete_folders_except_merge
 from movie_opt.handle import Executor
+from movie_opt.config import FILTER_MORE_COUNT
+
 
 @timing_decorator
 def custom1(args,executor):
@@ -142,7 +144,7 @@ def custom1(args,executor):
                     try:
                         srt_file_path = os.path.join(srt_segment_folder, file_name)
                         cargs = args
-                        cargs = argparse.Namespace(avg_en_word_count=avg_word_len,srt_path=srt_file_path,video_path=os.path.join(video_segment_folder,get_filename_without_extension(file_name)+video_extension))
+                        cargs = argparse.Namespace(avg_en_word_count=avg_word_len+FILTER_MORE_COUNT,srt_path=srt_file_path,video_path=os.path.join(video_segment_folder,get_filename_without_extension(file_name)+video_extension))
                         executor.pictureOperater.split_video(cargs)
                     except Exception as e:
                         print(f"按照字幕行，生成视频中每一句的朗读视频和跟读视频处理 {file_name} 时出错，错误: {str(e)}")
@@ -330,7 +332,7 @@ def custom3(args,executor):
                     try:
                         srt_file_path = os.path.join(srt_segment_folder, file_name)
                         cargs = args
-                        cargs = argparse.Namespace(avg_en_word_count=avg_word_len,srt_path=srt_file_path,video_path=os.path.join(video_segment_folder,get_filename_without_extension(file_name)+video_extension))
+                        cargs = argparse.Namespace(avg_en_word_count=avg_word_len+FILTER_MORE_COUNT,srt_path=srt_file_path,video_path=os.path.join(video_segment_folder,get_filename_without_extension(file_name)+video_extension))
                         executor.pictureOperater.split_video(cargs)
                     except Exception as e:
                         print(f"按照字幕行，生成视频中每一句的朗读视频和跟读视频处理 {file_name} 时出错，错误: {str(e)}")

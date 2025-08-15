@@ -1,5 +1,6 @@
 import os
 from dashscope import Generation
+import traceback
 
 class QwenPlusAssistant:
     def __init__(self, api_key=None, model='qwen-max', result_format="message"):
@@ -46,6 +47,8 @@ class QwenPlusAssistant:
             else:
                 return f"请求失败，错误码：{response.code}，错误信息：{response.message}"
         except Exception as e:
+            #打印错误堆栈信息
+            traceback.print_exc()
             return f"发生错误：{e}"
 
 # # 示例使用：
