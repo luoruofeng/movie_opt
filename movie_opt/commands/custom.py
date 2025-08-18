@@ -249,6 +249,12 @@ def custom3(args,executor):
                     raise RuntimeError(f"{subdir_path}文件夹下没有srt文件")
                 srt = srts[0]
                 convert_to_utf8(srt)
+
+                # srt 转为 txt
+                executor.subtitleOperater.srt_2_en_txt(srt)
+                executor.subtitleOperater.srt_2_txt(srt)
+
+
                 ass = change_file_extension(srt,"ass")
                 print(f"正在处理子文件夹: {subdir_path}")
                 c = sys.argv[0]
@@ -348,23 +354,27 @@ def custom3(args,executor):
                 executor.mergeOperater.merge1(cargs)
                 
 
-                # 相同编号的“1中英文对照 2跟读 3磨耳朵”视频拼接起来
-                logging.info(f"相同编号的“1中英文对照 2跟读 3磨耳朵”视频拼接起来\n{'-'*22}") 
-                cargs = args
-                cargs = SimpleNamespace(path=video_segment_folder)
-                executor.mergeOperater.merge2(cargs)
+                # # 相同编号的“1中英文对照 2跟读 3磨耳朵”视频拼接起来
+                # logging.info(f"相同编号的“1中英文对照 2跟读 3磨耳朵”视频拼接起来\n{'-'*22}") 
+                # cargs = args
+                # cargs = SimpleNamespace(path=video_segment_folder)
+                # executor.mergeOperater.merge2(cargs)
 
 
-                # 将 所有“中英文对照”， 所有“跟读”， 所有“磨耳朵”视频拼接起来,形成三部完整的电影
-                logging.info(f"将 所有“中英文对照”， 所有“跟读”， 所有“磨耳朵”视频拼接起来,形成三部完整的电影\n{'-'*22}")
-                cargs = args
-                cargs = SimpleNamespace(path=video_segment_folder)
-                executor.mergeOperater.merge3(cargs) 
+                # # 将 所有“中英文对照”， 所有“跟读”， 所有“磨耳朵”视频拼接起来,形成三部完整的电影
+                # logging.info(f"将 所有“中英文对照”， 所有“跟读”， 所有“磨耳朵”视频拼接起来,形成三部完整的电影\n{'-'*22}")
+                # cargs = args
+                # cargs = SimpleNamespace(path=video_segment_folder)
+                # executor.mergeOperater.merge3(cargs) 
 
                 # # 删除txt（拼接文件）
                 # delete_txt_files(video_segment_folder)
                 # # 删除其他文件夹和文件
                 # delete_folders_except_merge(video_segment_folder)
+                
+                
+
+                #将摸耳朵的mp4转换为mp3
             else:
                 print(f"{subdir_path} 不是一个有效的文件夹。需要传入的文件夹内包含子文件夹。")
         except Exception as e:

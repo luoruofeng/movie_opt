@@ -929,60 +929,119 @@ class SubtitleOperater:
         print(f"转换完成: {srt_file_path}")
 
 
-def srt_2_en_txt(srt_path, output_folder=None):
-    """ 
-    处理单个 SRT 文件，将其分段 
-    删除srt文件中的时间戳行
-    删除空行
-    删除含有中文的行
-    """
-    print(f"正在处理文件: {srt_path}")
-    
-    try:
-        with open(srt_path, "r", encoding="utf-8") as file:
-            lines = file.readlines()
-    except FileNotFoundError:
-        print(f"错误: 文件未找到 {srt_path}")
-        return
+    def srt_2_txt(self,srt_path, output_folder=None):
+        """ 
+        处理单个 SRT 文件，将其分段 
+        删除srt文件中的时间戳行
+        删除空行
+        """
+        print(f"正在处理文件: {srt_path}")
+        
+        try:
+            with open(srt_path, "r", encoding="utf-8") as file:
+                lines = file.readlines()
+        except FileNotFoundError:
+            print(f"错误: 文件未找到 {srt_path}")
+            return
 
-    processed_lines = []
-    for i in range(len(lines)):
-        line = lines[i].strip()
-        
-        # 检查是否为时间戳行
-        if '-->' in line and re.match(r"(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})", line):
-            continue
-        
-        # 检查是否为空行
-        if not line:
-            continue
+        processed_lines = []
+        for i in range(len(lines)):
+            line = lines[i].strip()
             
-        # 检查是否为纯数字（行号）
-        if line.isdigit():
-            continue
+            # 检查是否为时间戳行
+            if '-->' in line and re.match(r"(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})", line):
+                continue
+            
+            # 检查是否为空行
+            if not line:
+                continue
+                
+            # 检查是否为纯数字（行号）
+            if line.isdigit():
+                continue
 
-        # 检查是否含有中文字符
-        if re.search(r'[\u4e00-\u9fa5]', line):
-            continue
+            # 检查是否含有中文字符
+            if re.search(r'[\u4e00-\u9fa5]', line):
+                processed_lines.append("\n")
 
-        if processed_lines and line == processed_lines[-1]:
-            continue
+            if processed_lines and line == processed_lines[-1]:
+                continue
+            
+            processed_lines.append(line)
+
+        # 构建输出路径
+        original_name = os.path.splitext(os.path.basename(srt_path))[0]
+        output_filename = f"{original_name}.txt"
         
-        processed_lines.append(line)
+        if output_folder:
+            if not os.path.exists(output_folder):
+                os.makedirs(output_folder)
+            output_path = os.path.join(output_folder, output_filename)
+        else:
+            output_path = os.path.join(os.path.dirname(srt_path), output_filename)
 
-    # 构建输出路径
-    original_name = os.path.splitext(os.path.basename(srt_path))[0]
-    output_filename = f"{original_name}.txt"
-    
-    if output_folder:
-        if not os.path.exists(output_folder):
-            os.makedirs(output_folder)
-        output_path = os.path.join(output_folder, output_filename)
-    else:
-        output_path = os.path.join(os.path.dirname(srt_path), output_filename)
+        # 保存处理后的文件
+        with open(output_path, "w", encoding="utf-8") as file:
+            file.write("\n".join(processed_lines))
+        
+        print(f"处理完成，结果已保存到: {output_path}")
 
-    # 保存处理后的文件
-    with open(output_path, "w", encoding="utf-8") as file:
-        file.write("\n".join(processed_lines))
-    
-    print(f"处理完成，结果已保存到: {output_path}")
+
+    def srt_2_en_txt(self,srt_path, output_folder=None):
+        """ 
+        处理单个 SRT 文件，将其分段 
+        删除srt文件中的时间戳行
+        删除空行
+        删除含有中文的行
+        """
+        print(f"正在处理文件: {srt_path}")
+        
+        try:
+            with open(srt_path, "r", encoding="utf-8") as file:
+                lines = file.readlines()
+        except FileNotFoundError:
+            print(f"错误: 文件未找到 {srt_path}")
+            return
+
+        processed_lines = []
+        for i in range(len(lines)):
+            line = lines[i].strip()
+            
+            # 检查是否为时间戳行
+            if '-->' in line and re.match(r"(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})", line):
+                continue
+            
+            # 检查是否为空行
+            if not line:
+                continue
+                
+            # 检查是否为纯数字（行号）
+            if line.isdigit():
+                continue
+
+            # 检查是否含有中文字符
+            if re.search(r'[\u4e00-\u9fa5]', line):
+                continue
+
+            if processed_lines and line == processed_lines[-1]:
+                continue
+
+            processed_lines.append(line)
+
+        # 构建输出路径
+        original_name = os.path.splitext(os.path.basename(srt_path))[0]
+        output_filename = f"{original_name}_en.txt"
+
+        
+        if output_folder:
+            if not os.path.exists(output_folder):
+                os.makedirs(output_folder)
+            output_path = os.path.join(output_folder, output_filename)
+        else:
+            output_path = os.path.join(os.path.dirname(srt_path), output_filename)
+
+        # 保存处理后的文件
+        with open(output_path, "w", encoding="utf-8") as file:
+            file.write("\n".join(processed_lines))
+        
+        print(f"处理完成，结果已保存到: {output_path}")

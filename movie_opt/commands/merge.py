@@ -239,6 +239,15 @@ def merge_diff_type(args,type):
         ]
         return merge_mp4(args, folder_types,"磨耳朵")
 
+    
+    if type == 5:
+        folder_types = [
+            "每行完整视频",
+            "每行发音视频",
+            "每行发音视频2"
+        ]
+        return merge_mp4(args, folder_types,"无儿童磨耳朵")
+
     # 合并视频-最终
     if type == 4:
         if args.cnen_c is None or len(args.cnen_c) <= 0:
@@ -503,6 +512,11 @@ class MergeOperater:
         
         ear_c = merge_diff_type(args,3)
         logging.info(f"merge1:逐行拼接“磨耳朵”视频完成 {args.path}\n{ear_c}")
+
+        
+        ear_without_children_c = merge_diff_type(args,5)
+        logging.info(f"merge1:逐行拼接“无儿童磨耳朵”视频完成 {args.path}\n{ear_without_children_c}")
+
         
 
     def merge2(self,args):
