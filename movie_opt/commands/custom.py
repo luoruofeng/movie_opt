@@ -356,28 +356,13 @@ def custom3(args,executor):
                 #找到ear_folder下的mp4文件的绝对路径
                 mp4_files = find_video_files(ear_folder)
                 mp3_path = mp4_2_mp3(mp4_files[0])
-
-
-                # # 相同编号的“1中英文对照 2跟读 3磨耳朵”视频拼接起来
-                # logging.info(f"相同编号的“1中英文对照 2跟读 3磨耳朵”视频拼接起来\n{'-'*22}") 
-                # cargs = args
-                # cargs = SimpleNamespace(path=video_segment_folder)
-                # executor.mergeOperater.merge2(cargs)
-
-
-                # # 将 所有“中英文对照”， 所有“跟读”， 所有“磨耳朵”视频拼接起来,形成三部完整的电影
-                # logging.info(f"将 所有“中英文对照”， 所有“跟读”， 所有“磨耳朵”视频拼接起来,形成三部完整的电影\n{'-'*22}")
-                # cargs = args
-                # cargs = SimpleNamespace(path=video_segment_folder)
-                # executor.mergeOperater.merge3(cargs) 
+                print(f"录制MP4音频保存为mp3 {mp3_path}")
 
                 # # 删除txt（拼接文件）
                 # delete_txt_files(video_segment_folder)
                 # # 删除其他文件夹和文件
                 # delete_folders_except_merge(video_segment_folder)
                 
-                
-
             else:
                 print(f"{subdir_path} 不是一个有效的文件夹。需要传入的文件夹内包含子文件夹。")
         except Exception as e:

@@ -4,7 +4,7 @@ import traceback
 import re
 import torch
 from movie_opt.commands.ai import LaunageAI
-from movie_opt.config import QWEN_MODEL_NAME, FILTER_COUNT
+from movie_opt.config import LOCAL_MODEL_NAME, FILTER_COUNT, REMOTE_MODEL_NAME
 from movie_opt.utils import *
 import shutil
 from datetime import timedelta
@@ -718,7 +718,7 @@ class SubtitleOperater:
         sentences = None
         for i in range(4):
             print(f"第{i+1}次本地模型尝试")
-            reply = self.launageAI.ask_english_teacher_local_llm("不增加任何单词，不减少任何单词以及不改变任何单词顺序的情况下，语法和单词错误也不改变任何单词以及单词顺序的情况下，删除这段话中错误的标点符号，添加正确的标点符号，直接回答，不要回复任何无效内容，不要回复任何描述语言："+txt,model_name=QWEN_MODEL_NAME)
+            reply = self.launageAI.ask_english_teacher_local_llm("不增加任何单词，不减少任何单词以及不改变任何单词顺序的情况下，语法和单词错误也不改变任何单词以及单词顺序的情况下，删除这段话中错误的标点符号，添加正确的标点符号，直接回答，不要回复任何无效内容，不要回复任何描述语言："+txt,model_name=LOCAL_MODEL_NAME)
             reply = reply.replace("\n","")
             if remove_non_alphanumeric(reply) != remove_non_alphanumeric_txt:
                 print(f"reply:{reply}")
@@ -729,7 +729,7 @@ class SubtitleOperater:
                 break
         
         if sentences is None:
-            QWEN_ASSISTANT = QwenPlusAssistant( model='qwen-max')
+            QWEN_ASSISTANT = QwenPlusAssistant( model=REMOTE_MODEL_NAME)
             for i in range(3):
                 print(f"第{i+1}次远程模型尝试")
                 qwen_assistant = QWEN_ASSISTANT.converse("不增加任何单词，不减少任何单词以及不改变任何单词顺序的情况下，语法和单词错误也不改变任何单词以及单词顺序的情况下，删除这段话中错误的标点符号，添加正确的标点符号，直接回答，不要回复任何无效内容，不要回复任何描述语言："+txt)

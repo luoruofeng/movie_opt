@@ -1,7 +1,10 @@
 # config.py
 
-# The model name for the AI.使用的本地ai模型
-QWEN_MODEL_NAME = "qwen2.5:32b"
+# The local model name for the AI.使用的本地ai模型
+LOCAL_MODEL_NAME = "qwen2.5:32b"
+
+# The remove model name for the AI.使用的远程ai模型
+REMOTE_MODEL_NAME = "qwen-plus-latest"
 
 # The filter score for picture command.过滤超过FILTER_SCORE分的字幕
 FILTER_SCORE = 4

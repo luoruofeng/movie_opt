@@ -6,7 +6,7 @@ from datetime import datetime
 import requests
 import json  # 导入标准库的 json 模块
 from movie_opt.qwen_utils import QwenPlusAssistant
-from movie_opt.config import FILTER_SCORE, QWEN_MODEL_NAME
+from movie_opt.config import FILTER_SCORE, LOCAL_MODEL_NAME
 
 
 
@@ -63,7 +63,7 @@ class LaunageAI:
 
 
 
-    def ask_english_teacher_local_llm(self,question,model_name=QWEN_MODEL_NAME):
+    def ask_english_teacher_local_llm(self,question,model_name=LOCAL_MODEL_NAME):
         """
         调用本地 Ollama 的 Llama 3.2 模型，作为英语老师回答问题。
         
@@ -116,7 +116,7 @@ class LaunageAI:
                 print("没有找到最难的单词")
                 return None
         # 本地查询不准
-        # reply = self.ask_english_teacher_local_llm(q,model_name=QWEN_MODEL_NAME)
+        # reply = self.ask_english_teacher_local_llm(q,model_name=LOCAL_MODEL_NAME)
         # logging.info("提问："+q+"\n回答：\n"+reply+"\n")
         # print("提问："+q+"\n回答：\n"+reply+"\n")
         # if reply is None or len(reply) == 0 or str(reply).strip()=="没有":
@@ -131,7 +131,7 @@ class LaunageAI:
 
     def split_sentence(self,en_str):
         q = f"找出句子中自然的停顿点或者意思转折的地方进行分割,只返回分割句子的内容，无关内容不返回，风格用竖线完成，句子：{en_str}"
-        reply = self.ask_english_teacher_local_llm(q,model_name=QWEN_MODEL_NAME)
+        reply = self.ask_english_teacher_local_llm(q,model_name=LOCAL_MODEL_NAME)
         logging.info("提问："+q+"\n回答：\n"+reply+"\n")
         print("提问："+q+"\n回答：\n"+reply+"\n")
         subsentences = reply.split("|")
@@ -150,7 +150,7 @@ class LaunageAI:
         sentence_score = 0
         try:
             q = f"给这个英语句子的难度打分，0到10分的范围，只告诉我分数无需其他任何信息：{en_content}"
-            reply = self.ask_english_teacher_local_llm(q,model_name=QWEN_MODEL_NAME)
+            reply = self.ask_english_teacher_local_llm(q,model_name=LOCAL_MODEL_NAME)
             logging.info("提问："+q+"\n回答：\n"+reply+"\n")
             print("提问："+q+"\n回答：\n"+reply+"\n")
             pattern = r'\d+'# 正则表达式模式匹配所有数字
@@ -173,7 +173,7 @@ class LaunageAI:
         score = 0
         try:
             q = f"给这个单词的难度打分，0到10分的范围，只告诉我分数无需其他任何信息：{most_hard_word}"
-            reply = self.ask_english_teacher_local_llm(q,model_name=QWEN_MODEL_NAME)
+            reply = self.ask_english_teacher_local_llm(q,model_name=LOCAL_MODEL_NAME)
             logging.info("提问："+q+"\n回答：\n"+reply+"\n")
             print("提问："+q+"\n回答：\n"+reply+"\n")
             pattern = r'\d+'# 正则表达式模式匹配所有数字
@@ -192,7 +192,7 @@ class LaunageAI:
                 return score
 
             q = f"这句话中:“{en_str}”是否存在 {most_hard_word} 这个单词。如果存在直接返回“是”，否则返回“否”"
-            result = self.ask_english_teacher_local_llm(q,model_name=QWEN_MODEL_NAME)
+            result = self.ask_english_teacher_local_llm(q,model_name=LOCAL_MODEL_NAME)
             logging.info("提问："+q+"\n回答：\n"+result+"\n")
             print("提问："+q+"\n回答：\n"+result+"\n")
             result = find_yes_or_no(result)
@@ -201,7 +201,7 @@ class LaunageAI:
                 return score
 
             q = f"在{en_str}这句话中{most_hard_word}这个单词是不存在的错误单词或拼写错误吗？如果是错误的直接返回“是”，否则返回“否”"
-            result = self.ask_english_teacher_local_llm(q,model_name=QWEN_MODEL_NAME)
+            result = self.ask_english_teacher_local_llm(q,model_name=LOCAL_MODEL_NAME)
             logging.info("提问："+q+"\n回答：\n"+result+"\n")
             print("提问："+q+"\n回答：\n"+result+"\n")
             result = find_yes_or_no(result)
@@ -211,7 +211,7 @@ class LaunageAI:
 
 
             q = f"在{en_str}这句话中{most_hard_word}是名字吗,回答“是”或者“否”"
-            result = self.ask_english_teacher_local_llm(q,model_name=QWEN_MODEL_NAME)
+            result = self.ask_english_teacher_local_llm(q,model_name=LOCAL_MODEL_NAME)
             logging.info("提问："+q+"\n回答：\n"+result+"\n")
             print("提问："+q+"\n回答：\n"+result+"\n")
             result = find_yes_or_no(result)
@@ -220,7 +220,7 @@ class LaunageAI:
                 return score
             
             q = f"在{en_str}这句话中{most_hard_word}是专有名词吗,回答“是”或者“否”"
-            result = self.ask_english_teacher_local_llm(q,model_name=QWEN_MODEL_NAME)
+            result = self.ask_english_teacher_local_llm(q,model_name=LOCAL_MODEL_NAME)
             logging.info("提问："+q+"\n回答：\n"+result+"\n")
             print("提问："+q+"\n回答：\n"+result+"\n")
             result = find_yes_or_no(result)
@@ -239,7 +239,7 @@ class LaunageAI:
         for word in most_hard_word:
             first_line = word + "\n"
             q = f"这个单词：{word}的中文翻译，直接回复翻译结果不要回复其他内容，如果有多个翻译结果用分号隔开，如果这样的单词不存在或拼写错误直接返回“单词错误”"
-            reply = self.ask_english_teacher_local_llm(q,model_name=QWEN_MODEL_NAME)
+            reply = self.ask_english_teacher_local_llm(q,model_name=LOCAL_MODEL_NAME)
             logging.info("提问："+q+"\n回答：\n"+reply+"\n")
             print("提问："+q+"\n回答：\n"+reply+"\n")
             if reply.strip() == "单词错误":
@@ -248,14 +248,14 @@ class LaunageAI:
             first_line += (reply+" ")
             en_cn[word] = reply
             # q = f"这个单词：{word}的音标，直接回复音标结果不要回复其他内容，如果有多个音标结果返回第一个"
-            # reply = self.ask_english_teacher_local_llm(q,model_name=QWEN_MODEL_NAME)
+            # reply = self.ask_english_teacher_local_llm(q,model_name=LOCAL_MODEL_NAME)
             # logging.info("提问："+q+"\n回答：\n"+reply+"\n")
             # print("提问："+q+"\n回答：\n"+reply+"\n")
             # first_line += (reply+" ")
             replys.append(first_line)
 
             # q = f"这个单词：{word}的造一句例句，要求例句简单，常用,例句的中文翻译重启一行"
-            # reply = self.ask_english_teacher_local_llm(q,model_name=QWEN_MODEL_NAME)
+            # reply = self.ask_english_teacher_local_llm(q,model_name=LOCAL_MODEL_NAME)
             # logging.info("提问："+q+"\n回答：\n"+reply+"\n")
             # print("提问："+q+"\n回答：\n"+reply+"\n")
             # reply = add_indent_to_str(reply)
