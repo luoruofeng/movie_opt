@@ -13,4 +13,4 @@ FILTER_COUNT = 11
 FILTER_MORE_COUNT = 4
 
 # The number of composite images to generate.生成图片数量
-COMPOSITE_IMAGE_COUNT = 11
+COMPOSITE_IMAGE_COUNT = 111

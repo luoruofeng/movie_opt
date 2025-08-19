@@ -344,15 +344,19 @@ def custom3(args,executor):
                         print(f"按照字幕行，生成视频中每一句的朗读视频和跟读视频处理 {file_name} 时出错，错误: {str(e)}")
                         traceback.print_exc()
                         continue
-                
-                
-                
+                                
                 # 逐行拼接“1中英文对照 2跟读 3磨耳朵”视频
                 logging.info(f"逐行拼接“1中英文对照 2跟读 3磨耳朵”视频\n{'-'*22}")
                 cargs = args
                 cargs = SimpleNamespace(path=video_segment_folder)
                 executor.mergeOperater.merge1(cargs)
                 
+                #将摸耳朵的mp4转换为mp3
+                ear_folder = os.path.join(video_segment_folder,"合并视频-磨耳朵-1")
+                #找到ear_folder下的mp4文件的绝对路径
+                mp4_files = find_video_files(ear_folder)
+                mp3_path = mp4_2_mp3(mp4_files[0])
+
 
                 # # 相同编号的“1中英文对照 2跟读 3磨耳朵”视频拼接起来
                 # logging.info(f"相同编号的“1中英文对照 2跟读 3磨耳朵”视频拼接起来\n{'-'*22}") 
@@ -374,7 +378,6 @@ def custom3(args,executor):
                 
                 
 
-                #将摸耳朵的mp4转换为mp3
             else:
                 print(f"{subdir_path} 不是一个有效的文件夹。需要传入的文件夹内包含子文件夹。")
         except Exception as e:

@@ -1202,6 +1202,54 @@ def get_mp4_duration_ffmpeg(file_path):
     except Exception as e:
         print(f"发生错误: {e}")
         return None
+
+
+def mp4_2_mp3(video_path: str):
+    """
+    使用 ffmpeg 将 mp4 或 mkv 的音轨保存为 mp3。
+    将mp3保存到与原视频相同的父文件夹下，并且与原视频同名。
+    如果可以使用cuda加速就使用cuda加速。
+
+    :param video_path: 视频文件的路径
+    :return: The path to the mp3 file, or None if conversion failed.
+    """
+    if not os.path.exists(video_path):
+        print(f"视频文件不存在: {video_path}")
+        return None
+
+    output_path = os.path.splitext(video_path)[0] + ".mp3"
+    
+    if os.path.exists(output_path):
+        print(f"MP3 文件已存在，跳过转换: {output_path}")
+        return output_path
+
+    command = ["ffmpeg"]
+
+    # 虽然音频提取主要是CPU工作，但如果需要，可以添加硬件加速解码
+    if torch.cuda.is_available():
+        print("CUDA is available, attempting to use hwaccel.")
+        command.extend(["-hwaccel", "cuda"])
+
+    command.extend([
+        "-i", video_path,
+        "-vn",  # 禁用视频流
+        "-c:a", "libmp3lame",  # 使用 libmp3lame MP3 编码器
+        "-q:a", "2",  # 设置VBR质量 (0-9, 0是最高质量)
+        output_path
+    ])
+
+    print(f"执行命令: {' '.join(command)}")
+
+    try:
+        result = subprocess.run(command, check=True, capture_output=True, text=True, encoding="utf-8", errors="ignore")
+        print(f"成功将音轨提取到: {output_path}")
+        return output_path
+    except subprocess.CalledProcessError as e:
+        print(f"ffmpeg 命令执行失败:")
+        print(f"  stdout: {e.stdout}")
+        print(f"  stderr: {e.stderr}")
+        return None
+
     
 
 def get_mp4_duration_cv2(file_path):
