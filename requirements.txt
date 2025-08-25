@@ -21,3 +21,5 @@ openai==1.59.7
 srt==3.5.3
 ass==0.5.4
 tenacity==9.0.0
+markdown-pdf==1.1
+WeasyPrint==62.3

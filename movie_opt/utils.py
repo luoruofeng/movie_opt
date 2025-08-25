@@ -15,6 +15,15 @@ from PIL import Image, ImageDraw, ImageFont
 import cv2
 import chardet
 from tinytag import TinyTag
+from markdown_pdf import MarkdownPdf, Section
+
+def markdown_to_pdf(md_file, pdf_file):
+    pdf = MarkdownPdf()
+    pdf.meta["title"] = "教程"
+    pdf.meta["author"] = "Luo"
+    with open(md_file, "r", encoding="utf-8") as f:
+        pdf.add_section(Section(f.read()))
+    pdf.save(pdf_file)
 
 def add_indent_to_str(text: str) -> str:
     return "\n".join("    " + line for line in text.splitlines())

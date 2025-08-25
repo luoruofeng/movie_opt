@@ -9,9 +9,12 @@ from types import SimpleNamespace
 import re
 from movie_opt.utils import *
 from movie_opt.commands.merge import delete_folders_except_merge
-from movie_opt.handle import Executor
 from movie_opt.config import FILTER_MORE_COUNT
+from movie_opt.handle import Executor
+from movie_opt.qwen_utils import QwenPlusAssistant
+from movie_opt.config import REMOTE_MODEL_NAME
 
+from movie_opt.utils import markdown_to_pdf
 
 @timing_decorator
 def custom1(args,executor):
@@ -211,6 +214,7 @@ def custom2(args, executor):
 
 
 def custom3(args,executor):
+    QWEN_ASSISTANT = QwenPlusAssistant( model=REMOTE_MODEL_NAME)
     if executor is None:
         logging.error("custom1 需要传入executor")
         executor = Executor()
@@ -251,9 +255,23 @@ def custom3(args,executor):
                 convert_to_utf8(srt)
 
                 # srt 转为 txt
-                executor.subtitleOperater.srt_2_en_txt(srt)
+                en_txt_path = executor.subtitleOperater.srt_2_en_txt(srt)
                 executor.subtitleOperater.srt_2_txt(srt)
 
+                # 生成教程
+                txt = None
+                with open(en_txt_path , "r", encoding="utf-8") as file:
+                    txt = file.read()
+                reply = QWEN_ASSISTANT.converse("以下是视频中的英文台词字幕，归纳总结复杂的单词（单词 音标 中文翻译 例句举例的形式展示）列表，复杂的句子的语法分析，口语表达列表，出题一套（雅思难度的完型填空），整理出来的内容要排版合理，逻辑清晰，有助于通过字幕学习英语的markdown格式的内容，字幕内容如下："+txt)
+                #save reply to markdown file
+                md_path = os.path.join(os.path.dirname(en_txt_path), "教程.md")
+                with open(md_path, "w", encoding="utf-8") as file:
+                    file.write(reply)
+
+                # convert markdown to pdf
+                
+                pdf_path = os.path.join(os.path.dirname(en_txt_path), "教程.pdf")
+                markdown_to_pdf(md_path, pdf_path)
 
                 ass = change_file_extension(srt,"ass")
                 print(f"正在处理子文件夹: {subdir_path}")
@@ -356,7 +374,7 @@ def custom3(args,executor):
                 #找到ear_folder下的mp4文件的绝对路径
                 mp4_files = find_video_files(ear_folder)
                 mp3_path = mp4_2_mp3(mp4_files[0])
-                print(f"录制MP4音频保存为mp3 {mp3_path}")
+                print(f"录制MP4音频保存为mp3 {mp3_path}")    
 
                 # # 删除txt（拼接文件）
                 # delete_txt_files(video_segment_folder)

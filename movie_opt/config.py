@@ -1,7 +1,7 @@
 # config.py
 
 # The local model name for the AI.使用的本地ai模型
-LOCAL_MODEL_NAME = "qwen2.5:32b"
+LOCAL_MODEL_NAME = "qwen2.5:14b"
 
 # The remove model name for the AI.使用的远程ai模型
 REMOTE_MODEL_NAME = "qwen-plus-latest"

@@ -985,6 +985,7 @@ class SubtitleOperater:
             file.write("\n".join(processed_lines))
         
         print(f"处理完成，结果已保存到: {output_path}")
+        return  output_path
 
 
     def srt_2_en_txt(self,srt_path, output_folder=None):
@@ -1045,3 +1046,4 @@ class SubtitleOperater:
             file.write("\n".join(processed_lines))
         
         print(f"处理完成，结果已保存到: {output_path}")
+        return output_path
